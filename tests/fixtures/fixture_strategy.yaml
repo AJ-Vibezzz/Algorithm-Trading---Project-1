@@ -20,6 +20,7 @@ universe:
   segments: [mid, small]
   rank_bounds: {large: [1, 30], mid: [31, 90], small: [91, 180], micro: [181, 260]}
   mcap_average_days: 126
+  size_metrics: [exchange_mcap, traded_value]
   min_listing_days: 252
   min_price_inr: 10
   min_median_traded_value_inr: 5000000

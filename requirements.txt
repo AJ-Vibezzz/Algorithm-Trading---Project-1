@@ -8,6 +8,7 @@ pyarrow>=14
 # Config, I/O, download
 PyYAML>=6.0
 requests>=2.31
+openpyxl>=3.1          # reads the exchange's market-cap lists (.xlsx)
 tqdm>=4.66
 # Charts and notebook
 matplotlib>=3.7

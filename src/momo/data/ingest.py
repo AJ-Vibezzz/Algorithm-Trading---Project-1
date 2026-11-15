@@ -17,6 +17,7 @@ import re
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
+import numpy as np
 import pandas as pd
 
 from ..config import DataConfig
@@ -128,6 +129,64 @@ def _compress_actions(daily: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def link_index_renames(indices: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Join each index's history across the exchange's renames.
+
+    Every index in the daily file has been renamed over the years ("S&P CNX
+    500" became "CNX 500" in 2013 and "Nifty 500" in 2015). Left alone, each
+    name would be a separate, short series. A rename is recognised from the
+    file itself: a name that appears for the first time continues an old name
+    when the old name was last seen on the previous index day and the new
+    name's previous close (its close minus its points change) equals the old
+    name's last close. Only an exact, unique match is linked.
+
+    Returns the index table with ``index_name`` set to the latest name and the
+    name in the file kept as ``raw_name``, plus a table of the links made.
+    """
+    out = indices.copy()
+    out["raw_name"] = out["index_name"]
+    cols = ["old_name", "new_name", "first_day_of_new_name", "old_last_close", "new_implied_previous_close"]
+    if out.empty or "change" not in out.columns:
+        return out, pd.DataFrame(columns=cols)
+    days = np.sort(out["date"].unique())
+    first = out.groupby("index_name")["date"].min()
+    last_rows = out.sort_values("date").groupby("index_name").tail(1).set_index("index_name")
+    enders: Dict[np.datetime64, List[str]] = {}
+    for name, d in last_rows["date"].items():
+        enders.setdefault(np.datetime64(d, "ns"), []).append(name)
+    start_rows = out.loc[out.groupby("index_name")["date"].idxmin()].set_index("index_name")
+
+    links = []
+    alias: Dict[str, str] = {}
+    for name, d in first.items():
+        k = int(np.searchsorted(days, np.datetime64(d, "ns")))
+        if k == 0:
+            continue  # present from the first file: nothing to link back to
+        implied = start_rows.at[name, "close"] - start_rows.at[name, "change"]
+        if not np.isfinite(implied):
+            continue
+        tol = max(0.015, 2e-6 * abs(implied))  # values carry two decimals
+        matches = [old for old in enders.get(days[k - 1], [])
+                   if old != name and abs(last_rows.at[old, "close"] - implied) <= tol]
+        if len(matches) == 1:
+            alias[matches[0]] = name
+            links.append({"old_name": matches[0], "new_name": name, "first_day_of_new_name": pd.Timestamp(d).date(),
+                          "old_last_close": float(last_rows.at[matches[0], "close"]),
+                          "new_implied_previous_close": round(float(implied), 2)})
+
+    def latest(name: str) -> str:
+        seen = set()
+        while name in alias and name not in seen:
+            seen.add(name)
+            name = alias[name]
+        return name
+
+    out["index_name"] = out["index_name"].map(latest)
+    # after a rename both names can carry a row for the same day in principle: keep one
+    out = out.sort_values(["date", "index_name"]).drop_duplicates(["date", "index_name"], keep="last")
+    return out.reset_index(drop=True), pd.DataFrame(links, columns=cols)
+
+
 def ingest(cfg: DataConfig, force: bool = False, progress: bool = True) -> Dict[str, int]:
     """Parse raw files into ``data/interim``. Returns row counts per output."""
     interim = cfg.interim
@@ -211,7 +270,12 @@ def ingest(cfg: DataConfig, force: bool = False, progress: bool = True) -> Dict[
         frames = [df for d, path in _loop(files, dataset, progress)
                   if (df := run_parser(parser, path, d, dataset)) is not None and len(df)]
         if frames:
-            pd.concat(frames, ignore_index=True).to_parquet(out, index=False)
+            table = pd.concat(frames, ignore_index=True)
+            if dataset == "ind_close":
+                table, links = link_index_renames(table)
+                links.to_csv(interim / "index_renames.csv", index=False)
+                counts["index_renames_linked"] = len(links)
+            table.to_parquet(out, index=False)
             state.mark(f"{dataset}:all", sig)
 
     # ---- monthly index members; exchange market-cap lists ---------------------

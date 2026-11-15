@@ -11,6 +11,8 @@ risk_free.csv                   91-day T-bill yield (RBI DBIE) -> Sharpe, cash r
 factors/*.csv                   India factor returns (e.g. IIMA library)
 benchmarks/*.csv                Total-return index history (niftyindices.com)
 index_constituents/*.csv        Historical index membership (point-in-time)
+amfi/*.xlsx                     AMFI half-yearly lists of average market cap (size categories)
+mcap_lists/*.xlsx               Extra NSE market-cap lists saved by hand (read by ingest)
 sector_map.csv                  Sector per company, incl. delisted names
 surveillance.csv                ASM / GSM history
 delistings.csv                  Why a stock stopped trading, and what holders got
@@ -20,10 +22,12 @@ return_overrides.csv            Hand corrections to flagged data errors
 
 from __future__ import annotations
 
+import datetime as dt
 import re
 from pathlib import Path
 from typing import Dict, Optional
 
+import numpy as np
 import pandas as pd
 
 from ..config import DataConfig
@@ -218,6 +222,117 @@ def load_index_constituents(cfg: DataConfig) -> pd.DataFrame:
     return out
 
 
+AMFI_COLUMNS = ["as_of", "isin", "symbol", "company", "rank", "mcap", "category"]
+_MONTH_NUM = {m: i for i, m in enumerate(
+    ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"], start=1)}
+_DATE_IN_TEXT = [
+    (re.compile(r"(\d{4})-(\d{2})-(\d{2})"), "ymd"),
+    (re.compile(r"(\d{1,2})(?:st|nd|rd|th)?[\s_\-]*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s_\-,]*(\d{4})", re.I), "dMy"),
+    (re.compile(r"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s_\-]*(\d{1,2})[\s_\-,]+(\d{4})", re.I), "Mdy"),
+]
+
+
+def _date_in_text(text: str) -> Optional[dt.date]:
+    """A date written inside a file name or a title line ('...ended 31 Dec 2023', '2023-12-31')."""
+    for pattern, style in _DATE_IN_TEXT:
+        m = pattern.search(str(text))
+        if not m:
+            continue
+        try:
+            if style == "ymd":
+                return dt.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            if style == "dMy":
+                return dt.date(int(m.group(3)), _MONTH_NUM[m.group(2).lower()[:3]], int(m.group(1)))
+            return dt.date(int(m.group(3)), _MONTH_NUM[m.group(1).lower()[:3]], int(m.group(2)))
+        except (ValueError, KeyError):
+            continue
+    return None
+
+
+def parse_amfi_list(path: Path) -> pd.DataFrame:
+    """One AMFI "average market capitalisation of listed companies" file -> ``AMFI_COLUMNS``.
+
+    AMFI publishes, after every June and December, the six-month average
+    market capitalisation of every listed company and its category under
+    SEBI's rule (large = ranks 1-100, mid = 101-250, small = 251 onwards).
+    ``mcap`` is the average across exchanges, in rupees; ``rank`` is the order
+    in the file. The half-year end is read from the file name (for example
+    ``...31Dec2023.xlsx``) or, failing that, from the title lines of the sheet;
+    rename the file to ``amfi_2023-12-31.xlsx`` if neither carries it.
+    """
+    from .parsers import _grid, _norm, _num  # same tolerant readers as the exchange files
+
+    grid = _grid(Path(path))
+    header_at = None
+    for i in range(min(25, len(grid))):
+        if any("ISIN" in _norm(v) for v in grid.iloc[i].tolist() if isinstance(v, str)):
+            header_at = i
+            break
+    if header_at is None:
+        raise ValueError(f"{path}: no header row with an ISIN column - is this the AMFI list?")
+    as_of = _date_in_text(Path(path).stem)
+    for i in range(header_at):  # title lines above the table
+        if as_of is not None:
+            break
+        as_of = _date_in_text(" ".join(str(v) for v in grid.iloc[i].tolist() if isinstance(v, str)))
+    if as_of is None:
+        raise ValueError(f"{path}: cannot tell which half-year this list is for. Put the half-year end in "
+                         "the file name, e.g. amfi_2023-12-31.xlsx")
+
+    names = [_norm(v) if isinstance(v, str) else "" for v in grid.iloc[header_at].tolist()]
+    body = grid.iloc[header_at + 1:].reset_index(drop=True)
+    body.columns = range(body.shape[1])
+
+    def col(*tokens: str, without: tuple = ()) -> Optional[int]:
+        for j, name in enumerate(names):
+            if name and all(t in name for t in tokens) and not any(w in name for w in without):
+                return j
+        return None
+
+    c_isin = col("ISIN")
+    c_name = col("COMPANY") if col("COMPANY") is not None else col("NAME")
+    c_avg = col("AVERAGE", "EXCHANGE")  # "Average of All Exchanges (Rs. Cr.)"
+    if c_avg is None:
+        c_avg = col("NSE", "MARKET", "CAP")
+    c_cat = col("CATEGOR")
+    c_sym = col("NSE", "SYMBOL")
+    if c_avg is None:
+        raise ValueError(f"{path}: no 'Average of All Exchanges' (or NSE market cap) column; found {names}")
+    scale = 1e5 if "LAKH" in names[c_avg] else 1e7  # AMFI publishes in Rs crore
+
+    out = pd.DataFrame({
+        "as_of": pd.Timestamp(as_of),
+        "isin": body[c_isin].fillna("").astype(str).str.strip().str.upper(),
+        "symbol": body[c_sym].fillna("").astype(str).str.strip().str.upper() if c_sym is not None else "",
+        "company": body[c_name].fillna("").astype(str).str.strip() if c_name is not None else "",
+        "mcap": _num(body[c_avg]) * scale,
+        "category": body[c_cat].fillna("").astype(str).str.strip() if c_cat is not None else "",
+    })
+    out = out[out["isin"].str.match(r"^IN[A-Z0-9]{10}$") & out["mcap"].notna()]
+    out = out.drop_duplicates("isin").reset_index(drop=True)
+    out["rank"] = np.arange(1, len(out) + 1, dtype=float)
+    if out.empty:
+        raise ValueError(f"{path}: no company rows with an ISIN and an average market cap")
+    out["as_of"] = out["as_of"].astype("datetime64[ns]")
+    return out[AMFI_COLUMNS]
+
+
+def load_amfi_lists(cfg: DataConfig) -> pd.DataFrame:
+    """Every AMFI list under ``data/external/amfi`` (xlsx, xls or csv) -> ``AMFI_COLUMNS``.
+
+    Empty when the folder is absent. A file that cannot be read stops the run
+    with the reason: a size list that silently went missing would change the
+    universe without anyone noticing.
+    """
+    folder = cfg.external / "amfi"
+    files = sorted(p for p in folder.glob("*") if p.suffix.lower() in (".xlsx", ".xls", ".csv")
+                   and not p.name.startswith(("~", "."))) if folder.exists() else []
+    if not files:
+        return pd.DataFrame(columns=AMFI_COLUMNS)
+    out = pd.concat([parse_amfi_list(p) for p in files], ignore_index=True)
+    return out.drop_duplicates(["as_of", "isin"], keep="last").reset_index(drop=True)
+
+
 def load_sector_map(cfg: DataConfig) -> pd.DataFrame:
     """Sector per company: ``symbol``, ``isin``, ``sector``.
 
@@ -298,6 +413,7 @@ def external_inventory(cfg: DataConfig) -> pd.DataFrame:
         ("factors", "recommended", "Factor exposures; self-built proxies are used if absent"),
         ("benchmarks", "recommended", "Total-return benchmarks; price indices are used if absent"),
         ("index_constituents", "recommended", "Needed only for universe.source = index_constituents"),
+        ("amfi", "optional", "AMFI half-yearly size lists; needed only if universe.size_metrics uses amfi_list"),
         ("sector_map.csv", "recommended", "Sector limits; NSE current labels are used if absent"),
         ("surveillance.csv", "optional", "ASM/GSM history; series (BE/BZ) is the fallback proxy"),
         ("delistings.csv", "optional", "Delisting outcomes; the blanket assumption is used if absent"),
@@ -306,6 +422,6 @@ def external_inventory(cfg: DataConfig) -> pd.DataFrame:
     rows = []
     for name, need, note in items:
         p = ext / name
-        present = p.exists() and (p.is_file() or any(p.glob("*.csv")))
+        present = p.exists() and (p.is_file() or any(p.glob("*.csv")) or any(p.glob("*.xls*")))
         rows.append({"file": name, "status": need, "present": bool(present), "if_absent": note})
     return pd.DataFrame(rows)

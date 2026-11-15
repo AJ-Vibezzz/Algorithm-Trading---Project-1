@@ -34,6 +34,7 @@ universe:
   source: mcap_rank
   segments: [mid, small]
   mcap_average_days: 126
+  size_metrics: [exchange_mcap, exchange_list, traded_value]
   min_listing_days: 252
   min_price_inr: 10
   min_median_traded_value_inr: 10000000

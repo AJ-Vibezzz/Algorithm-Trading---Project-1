@@ -8,6 +8,7 @@ force a rebuild. Nothing here touches real market data or produces results.
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 import hashlib
 import json
@@ -38,7 +39,8 @@ STRATEGY = REPO / "tests" / "fixtures" / "fixture_strategy.yaml"
 def _signature(spec: FixtureSpec) -> str:
     """Changes whenever the spec or the generator / data-layer code changes."""
     blob = json.dumps(asdict(spec), sort_keys=True, default=str)
-    for name in ("synthetic.py", "parsers.py", "panel.py", "ingest.py", "identifiers.py", "corporate_actions.py"):
+    for name in ("synthetic.py", "parsers.py", "panel.py", "ingest.py", "identifiers.py", "corporate_actions.py",
+                 "size.py", "sources.py", "external.py"):
         blob += (REPO / "src" / "momo" / "data" / name).read_text()
     return hashlib.sha256(blob.encode()).hexdigest()[:16]
 
@@ -71,6 +73,35 @@ def unadjusted_root() -> Path:
     spec = FixtureSpec(start=dt.date(2023, 3, 1), end=dt.date(2024, 12, 31), n_companies=90, seed=11,
                        prevclose_adjusted=False)
     return build_fixture("unadjusted", spec)
+
+
+# A small fixture laid out like the real archive: no ISIN column in the oldest price files, a first
+# market-cap list with ranks only, later lists with values, and the daily market-cap file only at the end.
+LATE_SPEC = FixtureSpec(
+    start=dt.date(2021, 1, 4), end=dt.date(2023, 6, 30), n_companies=110, seed=3,
+    isin_from=dt.date(2021, 6, 22),
+    mcap_list_dates=[dt.date(2021, 9, 30), dt.date(2022, 3, 31), dt.date(2022, 9, 30)],
+    rank_only_until=dt.date(2021, 9, 30),
+    mcap_daily_from=dt.date(2023, 1, 2),
+)
+
+
+@pytest.fixture(scope="session")
+def late_root() -> Path:
+    """The real-archive-like fixture: size comes from lists first, from the daily file only at the end."""
+    return build_fixture("late_mcap", LATE_SPEC)
+
+
+@pytest.fixture(scope="session")
+def late_truth_root() -> Path:
+    """The same companies and prices, but with the daily market-cap file from the first day: the answer key."""
+    return build_fixture("late_mcap_truth", dataclasses.replace(LATE_SPEC, mcap_daily_from=None))
+
+
+@pytest.fixture(scope="session")
+def late_ws(late_root) -> Workspace:
+    return Workspace.load(statutory_yaml=STATUTORY, data_cfg=DataConfig(root=str(late_root), data_kind="synthetic"),
+                          verbose=False)
 
 
 @pytest.fixture(scope="session")

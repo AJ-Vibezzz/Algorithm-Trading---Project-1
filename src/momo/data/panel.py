@@ -20,6 +20,9 @@ What this stage does, in order
    with the reason, so each one can be checked by hand.
 4. Add dividends to get total returns; build total-return and price indices.
 5. Attach shares outstanding and market capitalisation as published that day.
+   The exchange's daily market-cap file starts in January 2024; for earlier
+   days the market cap is carried forward from the exchange's latest
+   market-cap list (``size.py``). Each figure is labelled with its source.
 
 Nothing here looks forward in time: a row for date *t* depends only on files
 dated *t* or earlier.
@@ -40,6 +43,7 @@ from ..utils import to_ns
 from .corporate_actions import build_action_table
 from .identifiers import assign_security_ids, resolve_duplicates, security_master
 from .ingest import read_interim
+from .size import build_index_members, build_size_lists, estimate_mcap
 
 PANEL_COLUMNS = [
     "date", "sid", "symbol", "series", "isin",
@@ -47,7 +51,7 @@ PANEL_COLUMNS = [
     "volume", "value", "trades",
     "ret_total", "ret_price", "tri", "pri",
     "dividend", "adj_factor", "adj_source",
-    "shares", "face_value", "mcap", "band_hit", "lock", "cs2d", "arprod",
+    "shares", "face_value", "mcap", "mcap_src", "band_hit", "lock", "cs2d", "arprod",
 ]
 
 
@@ -318,7 +322,6 @@ def build_panel(cfg: DataConfig, verbose: bool = True) -> Dict[str, Path]:
     stats["share_of_rows_with_published_shares"] = round(float(df["shares"].notna().mean()), 4)
     df["shares"] = by_sid["shares"].ffill(limit=cfg.shares_ffill_days)
     df["face_value"] = by_sid["face_value"].ffill(limit=cfg.shares_ffill_days)
-    df["mcap"] = df["close"] * df["shares"]
 
     # 3. corporate actions and returns ---------------------------------------------
     listings = read_interim(cfg, "corp_actions")
@@ -345,6 +348,13 @@ def build_panel(cfg: DataConfig, verbose: bool = True) -> Dict[str, Path]:
     first_close = df.groupby("sid", sort=False)["close"].transform("first")
     df["tri"] = _cumulative_index(first_close, df["ret_total"], df["sid"])
     df["pri"] = _cumulative_index(first_close, df["ret_price"], df["sid"])
+
+    # market cap: the daily file where it exists, else the latest exchange list carried forward
+    from .external import load_amfi_lists  # local import: avoids a circular import at module load
+
+    size_lists = build_size_lists(cfg, df, read_interim(cfg, "mcap_lists"), load_amfi_lists(cfg), stats)
+    df["mcap"], df["mcap_src"] = estimate_mcap(df, size_lists, cfg.size_list_max_age_days, stats)
+    index_members = build_index_members(df, read_interim(cfg, "index_weights"), stats)
 
     # volume-weighted average price of the day (execution price candidate) -------------
     with np.errstate(divide="ignore", invalid="ignore"):
@@ -382,6 +392,8 @@ def build_panel(cfg: DataConfig, verbose: bool = True) -> Dict[str, Path]:
     master = security_master(df)
     master = _attach_sector(master, cfg)
     master.to_parquet(out_dir / "securities.parquet", index=False)
+    size_lists.to_parquet(out_dir / "size_lists.parquet", index=False)
+    index_members.to_parquet(out_dir / "index_members.parquet", index=False)
 
     stats.update(
         first_date=str(df["date"].min().date()),
@@ -462,3 +474,15 @@ def load_panel(
 
 def load_securities(cfg: DataConfig) -> pd.DataFrame:
     return to_ns(pd.read_parquet(cfg.processed / "securities.parquet"))
+
+
+def load_size_lists(cfg: DataConfig) -> pd.DataFrame:
+    """Exchange / AMFI size lists keyed by company id (empty if the panel was built without any)."""
+    path = cfg.processed / "size_lists.parquet"
+    return to_ns(pd.read_parquet(path)) if path.exists() else pd.DataFrame()
+
+
+def load_index_members(cfg: DataConfig) -> pd.DataFrame:
+    """Monthly Nifty 50 / Nifty Next 50 members keyed by company id (empty if none were downloaded)."""
+    path = cfg.processed / "index_members.parquet"
+    return to_ns(pd.read_parquet(path)) if path.exists() else pd.DataFrame()

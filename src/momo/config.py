@@ -169,6 +169,12 @@ class UniverseCfg:
         }
     )
     mcap_average_days: int = 126  # six months, as in the NSE Indices / AMFI reviews
+    # Size measures accepted, in order of preference (required when source = mcap_rank):
+    # exchange_mcap | exchange_list | amfi_list | traded_value  - see universe.py
+    size_metrics: Optional[List[str]] = None
+    # Optional: members of these indices on the decision date take the first ranks, e.g.
+    # ["NIFTY 50", "NIFTY NEXT 50"] makes the Nifty 100 the large caps. Empty = rank by size only.
+    large_cap_indices: List[str] = field(default_factory=list)
     index_names: List[str] = field(default_factory=list)  # used when source = index_constituents
     allowed_series: List[str] = field(default_factory=lambda: ["EQ"])
     min_listing_days: Optional[int] = _req()
@@ -453,6 +459,8 @@ class StrategyConfig:
             out.append("risk.hedge.index")
         if self.universe.source == "index_constituents" and not self.universe.index_names:
             out.append("universe.index_names")
+        if self.universe.source == "mcap_rank" and not self.universe.size_metrics:
+            out.append("universe.size_metrics (at least one)")
         if self.costs.spread_model == "fixed" and self.costs.fixed_half_spread_bps is None:
             out.append("costs.fixed_half_spread_bps")
         return out
@@ -483,6 +491,15 @@ class StrategyConfig:
 
         u, s, p, e, r = self.universe, self.signal, self.portfolio, self.execution, self.risk
         choice(u.source, ["mcap_rank", "index_constituents"], "universe.source")
+        allowed_sizes = ["exchange_mcap", "exchange_list", "amfi_list", "traded_value"]
+        for i, m in enumerate(u.size_metrics or []):
+            choice(m, allowed_sizes, f"universe.size_metrics.{i}")
+        if len(set(u.size_metrics or [])) != len(u.size_metrics or []):
+            errs.append("universe.size_metrics lists the same measure twice")
+        known_indices = ["NIFTY 50", "NIFTY NEXT 50"]
+        for name in u.large_cap_indices or []:
+            if str(name).strip().upper() not in known_indices:
+                errs.append(f"universe.large_cap_indices: '{name}' - monthly member lists exist only for {known_indices}")
         if u.segments:
             bad = [seg for seg in u.segments if seg not in u.rank_bounds]
             if bad:
@@ -556,6 +573,11 @@ class DataConfig:
     equity_isin_regex: str = "^INE.{4}01"
     price_ratio_tolerance: float = 0.005
     shares_ffill_days: int = 10
+    # Exchange (and AMFI) size lists: a list is used from its as-on date plus this many calendar
+    # days, and for at most ``size_list_max_age_days`` after its as-on date.
+    size_list_lag_days: int = 30
+    size_list_max_age_days: int = 400
+    index_list_max_age_days: int = 100  # monthly index member lists
     demerger_treatment: str = "neutralise"  # neutralise | raw
     include_dividends: bool = True
     symbol_reuse_gap_days: int = 180

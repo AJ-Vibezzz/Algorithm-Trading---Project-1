@@ -26,10 +26,12 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
+import numpy as np
 import pandas as pd
 import yaml
 
 from .config import ConfigError, DataConfig, StrategyConfig
+from .utils import month_end_flags
 
 DEFAULT_DATA = "config/data.yaml"
 DEFAULT_STRATEGY = "config/strategy.yaml"
@@ -242,19 +244,81 @@ def cmd_liquidity(args) -> None:
     from .universe import segment_liquidity_table
 
     ws = _workspace(args)
-    bounds = UniverseCfg().rank_bounds
-    try:  # use the group's own segment definitions if a config exists
-        bounds = StrategyConfig.load(args.strategy).universe.rank_bounds
-    except ConfigError:
+    bounds, metrics, large = UniverseCfg().rank_bounds, None, None
+    try:  # use the group's own segment definitions and size measures if a config exists
+        u = StrategyConfig.load(args.strategy).universe
+        bounds, metrics, large = u.rank_bounds, u.size_metrics, u.large_cap_indices
+    except (ConfigError, FileNotFoundError):
         pass
     _banner("Liquidity of each size segment at each year-end (typical daily traded value, Rs crore)")
-    table = segment_liquidity_table(ws.md, bounds)
-    with pd.option_context("display.width", 220, "display.float_format", "{:,.2f}".format):
+    table = segment_liquidity_table(ws.md, bounds, size_metrics=metrics, large_cap_indices=large)
+    with pd.option_context("display.width", 240, "display.float_format", "{:,.2f}".format):
         print(table.to_string())
     out = Path(args.out) / "segment_liquidity.csv"
     out.parent.mkdir(parents=True, exist_ok=True)
     table.to_csv(out)
-    print(f"\nSaved {out}. Facts for choosing your liquidity filter, fund size and participation cap - the choice is yours.")
+    print(f"\nSaved {out}. The size_metric column says how stocks were ranked that year (set the order in "
+          "universe.size_metrics;\nwith none set, the best measure available each year is used). "
+          "Facts for choosing your liquidity filter, fund size and participation cap - the choice is yours.")
+
+
+def cmd_sizecheck(args) -> None:
+    from .config import UniverseCfg
+    from .signals import market_return_sources
+    from .universe import SIZE_METRICS, SizeRanker, size_metric_comparison
+
+    ws = _workspace(args)
+    md = ws.md
+    bounds, large = UniverseCfg().rank_bounds, None
+    try:
+        u = StrategyConfig.load(args.strategy).universe
+        bounds, large = u.rank_bounds, u.large_cap_indices
+    except (ConfigError, FileNotFoundError):
+        pass
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+
+    _banner("Which size measures your data supports, and from when")
+    month_ends = [int(t) for t in np.where(month_end_flags(md.dates))[0]]
+    ranker = SizeRanker(md, list(SIZE_METRICS), UniverseCfg().mcap_average_days)
+    rows = []
+    for metric in SIZE_METRICS:
+        counts = [(t, int(np.isfinite(sc).sum())) for t in month_ends
+                  if (sc := ranker.score(t, metric)[0]) is not None and np.isfinite(sc).any()]
+        if counts:
+            rows.append({"size_metric": metric, "first_month_end": md.dates[counts[0][0]].date(),
+                         "last_month_end": md.dates[counts[-1][0]].date(), "month_ends": len(counts),
+                         "median_stocks_ranked": int(np.median([n for _, n in counts]))})
+        else:
+            rows.append({"size_metric": metric, "first_month_end": "", "last_month_end": "", "month_ends": 0,
+                         "median_stocks_ranked": 0})
+    coverage = pd.DataFrame(rows).set_index("size_metric")
+    print(coverage.to_string())
+    coverage.to_csv(out / "size_metric_coverage.csv")
+    if len(md.index_members):
+        m = md.index_members
+        print(f"\nMonthly index member lists: {m['as_of'].nunique()} month-ends, "
+              f"{m['as_of'].min().date()} to {m['as_of'].max().date()} ({', '.join(sorted(m['index_name'].unique()))})")
+    else:
+        print("\nNo monthly index member lists in the data (dataset 'mcwb').")
+
+    _banner("How far the measures agree where two are available (half-year ends)")
+    comp = size_metric_comparison(md, bounds, large_cap_indices=large)
+    if comp.empty:
+        print("No date has two measures available, so there is nothing to compare.")
+    else:
+        with pd.option_context("display.width", 240):
+            print(comp.to_string(index=False))
+        comp.to_csv(out / "size_metric_comparison.csv", index=False)
+
+    _banner("Market-return proxy used by the residual signal, betas and the factor proxies")
+    src = market_return_sources(md)
+    print(src.to_string(index=False))
+    if src.attrs.get("index_used"):
+        print(f"(exchange index used where there is no market cap: {src.attrs['index_used']})")
+    src.to_csv(out / "market_return_sources.csv", index=False)
+    print(f"\nSaved under {out}. These are facts about the data. Which measures to accept, in which order, and "
+          "what that\nmeans for your sample period are your decisions (docs/03_design_decisions.md, D2).")
 
 
 def cmd_episodes(args) -> None:
@@ -325,6 +389,10 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("liquidity", help="how liquid each size segment is, year by year (to choose filters)")
     common(sp)
     sp.set_defaults(func=cmd_liquidity)
+
+    sp = sub.add_parser("sizecheck", help="which size measures the data supports, from when, and how far they agree")
+    common(sp)
+    sp.set_defaults(func=cmd_sizecheck)
 
     sp = sub.add_parser("episodes", help="date the large falls of an index (to choose stress windows)")
     common(sp, strategy=False)

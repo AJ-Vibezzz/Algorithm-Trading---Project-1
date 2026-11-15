@@ -5,6 +5,7 @@ import threading
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
+import pandas as pd
 import pytest
 
 from momo.config import DataConfig
@@ -67,3 +68,32 @@ def test_url_and_file_name_conventions():
                          ("pr", dt.date(2019, 12, 31)), ("ind_close", dt.date(2021, 2, 1))):
         name = remote_file(dataset, day).local_rel.split("/")[-1]
         assert date_from_name(dataset, name) == day, "the date must survive the round trip through the file name"
+
+
+def test_monthly_index_files_and_market_cap_lists_are_downloaded(tmp_path):
+    """The two size sources for the years before the daily market-cap file, fetched and parsed."""
+    from momo.data.ingest import ingest, read_interim
+
+    spec = FixtureSpec(start=dt.date(2024, 3, 18), end=dt.date(2024, 4, 12), n_companies=20, seed=9, layout="server")
+    generate_fixture(tmp_path / "remote", spec)
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), partial(_Handler, directory=str(tmp_path / "remote" / "server")))
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    try:
+        cfg = DataConfig(root=str(tmp_path / "local"), archive_base_url=f"http://127.0.0.1:{httpd.server_address[1]}",
+                         max_workers=3, pause_s=0.0, max_retries=1)
+        assert {"mcwb", "mcap_lists"} <= set(cfg.datasets), "both are downloaded by default"
+        manifest = Downloader(cfg).run(spec.start, spec.end, progress=False)
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+    counts = summarise_manifest(manifest)
+    assert counts.loc["mcwb", "ok"] == 1, "March 2024 is the only complete month in the window"
+    assert counts.loc["mcap_lists", "ok"] == 1, "the list of 28 March 2024 falls inside the fixture"
+    assert (cfg.raw / "mcwb" / "2024" / "mcwb_mar24.zip").exists()
+    assert (cfg.raw / "mcap_lists" / "MCAP28032024.xlsx").exists()
+
+    ingest(cfg, progress=False)
+    weights, lists = read_interim(cfg, "index_weights"), read_interim(cfg, "mcap_lists")
+    assert set(weights["index_name"]) == {"NIFTY 50", "NIFTY NEXT 50"} and 12 <= len(weights) <= 20
+    assert (weights["as_of"] == pd.Timestamp("2024-03-31")).all()
+    assert (lists["as_of"] == pd.Timestamp("2024-03-28")).all() and lists["mcap"].notna().sum() >= 12

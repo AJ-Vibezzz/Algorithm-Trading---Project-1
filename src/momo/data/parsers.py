@@ -13,6 +13,7 @@ from __future__ import annotations
 import datetime as dt
 import io
 import re
+import warnings
 import zipfile
 from pathlib import Path
 from typing import Dict, Iterable, Optional, Sequence
@@ -35,7 +36,7 @@ PRICE_COLUMNS = [
 CORP_ACTION_COLUMNS = ["symbol", "series", "security", "ex_date", "record_date", "purpose", "seen_date"]
 MCAP_COLUMNS = ["date", "symbol", "series", "face_value", "shares", "mcap", "mcap_close", "category"]
 BAND_HIT_COLUMNS = ["date", "symbol", "series", "hit"]
-INDEX_COLUMNS = ["date", "index_name", "open", "high", "low", "close", "pe", "pb", "div_yield"]
+INDEX_COLUMNS = ["date", "index_name", "open", "high", "low", "close", "change", "pe", "pb", "div_yield"]
 MCAP_LIST_COLUMNS = ["as_of", "symbol", "company", "rank", "mcap"]
 INDEX_WEIGHT_COLUMNS = ["as_of", "index_name", "symbol", "company", "industry", "equity_capital", "ff_mcap", "weight"]
 
@@ -74,7 +75,11 @@ def _read_table(raw: bytes, must_have: Sequence[str]) -> pd.DataFrame:
     if header_at is None:
         raise ParseError(f"no header row containing {list(must_have)}")
     body = "\n".join(lines[header_at:])
-    df = pd.read_csv(io.StringIO(body), dtype=str, skipinitialspace=True, on_bad_lines="skip")
+    # index_col=False: a row with more fields than the header (a stray trailing comma) must lose
+    # the extra field, not shift every value one column to the left.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", pd.errors.ParserWarning)  # pandas warns about the dropped field
+        df = pd.read_csv(io.StringIO(body), dtype=str, skipinitialspace=True, on_bad_lines="skip", index_col=False)
     df.columns = [_norm(c) for c in df.columns]
     df = df.loc[:, [c for c in df.columns if c and not c.startswith("UNNAMED")]]
     return df.dropna(how="all")
@@ -309,6 +314,8 @@ def parse_ind_close(path: Path, date: dt.date) -> pd.DataFrame:
             "high": _num(df[c]) if (c := _pick(df, "HIGH_INDEX_VALUE", contains=["HIGH"])) else np.nan,
             "low": _num(df[c]) if (c := _pick(df, "LOW_INDEX_VALUE", contains=["LOW"])) else np.nan,
             "close": _num(df[close]),
+            # the day's change in index points: close minus the previous close
+            "change": _num(df[c]) if (c := _pick(df, "POINTS_CHANGE", contains=["POINTS"])) else np.nan,
             "pe": _num(df[c]) if (c := _pick(df, "P_E")) else np.nan,
             "pb": _num(df[c]) if (c := _pick(df, "P_B")) else np.nan,
             "div_yield": _num(df[c]) if (c := _pick(df, "DIV_YIELD", contains=["DIV"])) else np.nan,

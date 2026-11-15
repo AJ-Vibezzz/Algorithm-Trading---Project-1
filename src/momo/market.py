@@ -25,7 +25,7 @@ import pandas as pd
 from .config import DataConfig
 from .data.external import daily_risk_free, load_benchmark_tri, load_risk_free
 from .data.ingest import read_interim
-from .data.panel import load_panel, load_securities
+from .data.panel import load_index_members, load_panel, load_securities, load_size_lists
 from .frictions import ffill_rows, rolling_mean, rolling_median, rolling_std
 from .utils import ns_index
 
@@ -46,6 +46,9 @@ class MarketData:
         indices: pd.DataFrame,
         rf_daily: pd.Series,
         data_kind: str = "real",
+        size_lists: Optional[pd.DataFrame] = None,
+        index_members: Optional[pd.DataFrame] = None,
+        list_ages: Optional[Dict[str, int]] = None,
     ):
         self.dates = dates
         self.sids = sids
@@ -70,6 +73,11 @@ class MarketData:
         self.rf_daily = rf_daily.reindex(dates).fillna(0.0).to_numpy()
         self.rf_missing = bool(rf_daily.attrs.get("missing", False))
         self.data_kind = data_kind
+        # Dated size lists and index member lists (see data/size.py). Every lookup below takes
+        # the decision date and returns only lists already in force on it.
+        self.size_lists = size_lists if size_lists is not None else pd.DataFrame()
+        self.index_members = index_members if index_members is not None else pd.DataFrame()
+        self.list_ages = {"size": 400, "index": 100, **(list_ages or {})}  # days a list stays usable
 
     # ------------------------------------------------------------------ builders
     @classmethod
@@ -81,6 +89,9 @@ class MarketData:
         rf_annual: Optional[pd.Series] = None,
         benchmark_tri: Optional[pd.DataFrame] = None,
         data_kind: str = "real",
+        size_lists: Optional[pd.DataFrame] = None,
+        index_members: Optional[pd.DataFrame] = None,
+        list_ages: Optional[Dict[str, int]] = None,
     ) -> "MarketData":
         dates = ns_index(np.sort(panel["date"].unique()))
         sids = np.sort(panel["sid"].unique())
@@ -129,7 +140,7 @@ class MarketData:
         else:
             indices = pd.DataFrame(index=dates)
         rf = daily_risk_free(rf_annual if rf_annual is not None else pd.Series(dtype=float), dates)
-        return cls(dates, sids, fields, securities, indices, rf, data_kind)
+        return cls(dates, sids, fields, securities, indices, rf, data_kind, size_lists, index_members, list_ages)
 
     @classmethod
     def load(cls, cfg: DataConfig, start: Optional[str] = None, end: Optional[str] = None) -> "MarketData":
@@ -142,6 +153,9 @@ class MarketData:
             load_risk_free(cfg, verbose=False),
             load_benchmark_tri(cfg),
             cfg.data_kind,
+            load_size_lists(cfg),
+            load_index_members(cfg),
+            {"size": cfg.size_list_max_age_days, "index": cfg.index_list_max_age_days},
         )
 
     # ------------------------------------------------------------------ lookups
@@ -169,6 +183,64 @@ class MarketData:
         out = np.full(self.T, np.nan)
         out[1:] = lv[1:] / lv[:-1] - 1.0
         return out
+
+    # ------------------------------------------------------------------ dated lists
+    def size_list(self, source: str, date) -> tuple:
+        """The ``source`` size list in force on ``date``: ``(rank per company, as-on date)``.
+
+        ``rank`` is aligned to ``sids`` (NaN = not in the list). The list in
+        force is the latest one whose ``effective`` date is on or before
+        ``date``; it is dropped once older than the maximum age. Returns
+        ``(None, None)`` when no list is in force.
+        """
+        def make():
+            lists = self.size_lists
+            out = {}
+            if len(lists):
+                for (src, as_of), part in lists.groupby(["source", "as_of"], sort=True):
+                    rank = np.full(self.N, np.nan)
+                    col = np.searchsorted(self.sids, part["sid"].to_numpy())
+                    ok = (col < self.N) & (self.sids[np.minimum(col, self.N - 1)] == part["sid"].to_numpy())
+                    rank[col[ok]] = part["rank"].to_numpy(float)[ok]
+                    out.setdefault(src, []).append((pd.Timestamp(part["effective"].iloc[0]), pd.Timestamp(as_of), rank))
+            return out
+        date = pd.Timestamp(date)
+        best = None
+        for effective, as_of, rank in self._cache(("size_list_index",), make).get(source, []):
+            if effective <= date and (date - as_of).days <= self.list_ages["size"]:
+                best = (rank, as_of)  # lists are in date order, so the last match is the latest
+        return best if best is not None else (None, None)
+
+    def index_member_flags(self, names, date) -> tuple:
+        """Members of the named indices on ``date``: ``(bool per company, as-on date)``.
+
+        Uses the latest monthly member list dated on or before ``date`` (index
+        membership is announced in advance, so the month-end list is public on
+        that day). ``(None, None)`` if no list is recent enough.
+        """
+        def make():
+            mem = self.index_members
+            out = {}
+            if len(mem):
+                for (as_of, name), part in mem.groupby(["as_of", "index_name"], sort=True):
+                    col = np.searchsorted(self.sids, part["sid"].to_numpy())
+                    ok = (col < self.N) & (self.sids[np.minimum(col, self.N - 1)] == part["sid"].to_numpy())
+                    flags = np.zeros(self.N, bool)
+                    flags[col[ok]] = True
+                    out.setdefault(pd.Timestamp(as_of), {})[name] = flags
+            return sorted(out.items())
+        date = pd.Timestamp(date)
+        wanted = [str(n).strip().upper() for n in names]
+        best = None
+        for as_of, by_name in self._cache(("index_member_index",), make):
+            if as_of > date:
+                break
+            if (date - as_of).days <= self.list_ages["index"] and all(n in by_name for n in wanted):
+                flags = np.zeros(self.N, bool)
+                for n in wanted:
+                    flags |= by_name[n]
+                best = (flags, as_of)
+        return best if best is not None else (None, None)
 
     # ------------------------------------------------------------------ derived arrays (computed once)
     @cached_property
@@ -299,8 +371,12 @@ class MarketData:
         }
         rf = pd.Series(self.rf_daily[:k], index=self.dates[:k])
         rf.attrs["missing"] = self.rf_missing
+        # Lists dated after the cut are removed too, so the copy holds nothing from the future.
+        cut = self.dates[k - 1]
+        lists = self.size_lists[self.size_lists["effective"] <= cut] if len(self.size_lists) else self.size_lists
+        members = self.index_members[self.index_members["as_of"] <= cut] if len(self.index_members) else self.index_members
         return MarketData(self.dates[:k], self.sids, fields, self.securities.reset_index(),
-                          self.indices.iloc[:k], rf, self.data_kind)
+                          self.indices.iloc[:k], rf, self.data_kind, lists, members, self.list_ages)
 
     def describe(self) -> str:
         return (f"MarketData[{self.data_kind}]: {self.T} trading days "

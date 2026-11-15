@@ -32,7 +32,7 @@ from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
 
-from .sources import UDIFF_SWITCH_DATE, remote_file
+from .sources import MCAP_LIST_DIR, MCAP_LIST_FILES, UDIFF_SWITCH_DATE, monthly_file, remote_file
 
 README_TEXT = (
     "SYNTHETIC TEST FIXTURE\n"
@@ -50,6 +50,7 @@ SECTORS = [
 ]
 
 LEGACY_HEADER = "SYMBOL,SERIES,OPEN,HIGH,LOW,CLOSE,LAST,PREVCLOSE,TOTTRDQTY,TOTTRDVAL,TIMESTAMP,TOTALTRADES,ISIN,"
+LEGACY_HEADER_NO_ISIN = "SYMBOL,SERIES,OPEN,HIGH,LOW,CLOSE,LAST,PREVCLOSE,TOTTRDQTY,TOTTRDVAL,TIMESTAMP,"  # before 22 Jun 2011
 UDIFF_HEADER = (
     "TradDt,BizDt,Sgmt,Src,FinInstrmTp,FinInstrmId,ISIN,TckrSymb,SctySrs,XpryDt,FininstrmActlXpryDt,"
     "StrkPric,OptnTp,FinInstrmNm,OpnPric,HghPric,LwPric,ClsPric,LastPric,PrvsClsgPric,UndrlygPric,"
@@ -60,6 +61,13 @@ BC_HEADER = "SERIES,SYMBOL,SECURITY,RECORD_DT,BC_STRT_DT,BC_END_DT,EX_DT,ND_STRT
 MCAP_HEADER = ("Trade Date,Symbol,Series,Security Name,Category,Last Trade Date,Face Value(Rs.),"
                "Issue Size,Close Price/Paid up value(Rs.),Market Cap(Rs.)")
 BH_HEADER = "SYMBOL,SERIES,SECURITY,HIGH/LOW,INDEX FLAG"
+BH_HEADER_OLD = "SYMBOL,SR,SECURITY,HIGH/LOW,INDEX FLAG"  # the oldest archives head the series column "SR"
+MCWB_HEADER = ("Sr. No,Security Symbol,Security Name,Industry,Equity Capital (In Rs.),"
+               "Free Float Market Capitalisation (Rs. Crores),Weightage (%),Beta,R2,Volatility (%),"
+               "Monthly Return,Avg. Impact Cost (%)")
+MCWB_HEADER_OLD = ("Sr. No,Security Symbol,Security Name,Industry,Equity Capital,"
+                   "Free Float Market Capitalisation for {month},Weightage,Beta,R2,Volatility,Monthly Return,"
+                   "Avg. Impact Cost\n,,,,(In Rs.),(Rs. Crores),%,,,%,,%")
 IND_HEADER = ("Index Name,Index Date,Open Index Value,High Index Value,Low Index Value,Closing Index Value,"
               "Points Change,Change(%),Volume,Turnover (Rs. Cr.),P/E,P/B,Div Yield")
 
@@ -81,6 +89,20 @@ class FixtureSpec:
         ("Nifty 50", 1, 30), ("NIFTY MIDCAP 150", 31, 90), ("NIFTY SMALLCAP 250", 91, 180),
         ("NIFTY MICROCAP 250", 181, 260), ("Nifty 500", 1, 180),
     ])
+    # --- how the "exchange" publishes size information; the defaults mirror the real archive ---
+    # First day the PR zip carries the daily market-cap file (the real one starts in January 2024).
+    # None = from the first day, which keeps a fixture simple when size sources are not under test.
+    mcap_daily_from: Optional[dt.date] = None
+    # As-on dates of the "market capitalisation - all companies" lists. None = the dates of the real
+    # lists that fall inside the sample, written under their real file names.
+    mcap_list_dates: Optional[List[dt.date]] = None
+    rank_only_until: Optional[dt.date] = None  # lists dated up to here carry ranks but no values (as in 2019)
+    # The legacy bhavcopy has no ISIN column before this date (really: 22 June 2011). None = always has.
+    isin_from: Optional[dt.date] = None
+    large_cap_count: int = 30  # members of the two monthly index files together (the fixture's "Nifty 100")
+    # (name in index_buckets, its earlier name, date of the rename): the index file changes the name
+    # on that day, exactly as the real file did in 2013 and 2015.
+    index_rename: Optional[tuple] = ("Nifty 500", "CNX 500", dt.date(2021, 9, 1))
 
 
 @dataclass
@@ -288,6 +310,12 @@ def generate_fixture(root: Path, spec: Optional[FixtureSpec] = None) -> FixtureT
     drift = np.zeros(N)
     phi, sig_mu = 0.995, 0.0007 * spec.momentum_strength
 
+    if spec.mcap_list_dates is not None:
+        list_dates = sorted(spec.mcap_list_dates)
+    else:
+        list_dates = sorted(dt.date.fromisoformat(x) for x in MCAP_LIST_FILES)
+    list_dates = [x for x in list_dates if spec.start <= x <= spec.end]
+
     # ------------------------------------------------------------------ simulate day by day
     prev_close = np.full(N, np.nan)
     last_trade = np.full(N, -1)
@@ -439,6 +467,22 @@ def generate_fixture(root: Path, spec: Optional[FixtureSpec] = None) -> FixtureT
         _write_bhav(raw, spec, d, symbol[trade], ser[trade], isins[trade], opn[trade], hi[trade], lo[trade],
                     close[trade], pc_field[trade], volume[trade], value[trade], etf_px)
 
+        # --- monthly index member files and the all-company market-cap lists ---------------
+        mcap_now = np.where(active, np.where(trade, close, prev_close) * shares, np.nan)
+        if t == T - 1 or days[t + 1].month != day.month:
+            order = np.argsort(-np.nan_to_num(mcap_now, nan=-1.0), kind="stable")[:spec.large_cap_count]
+            order = [int(i) for i in order if np.isfinite(mcap_now[i])]
+            half = (len(order) + 1) // 2
+            _write_mcwb(raw, spec, d, [(symbol[i], i, SECTORS[sector[i]], shares[i] * fv[i], mcap_now[i]) for i in order[:half]],
+                        [(symbol[i], i, SECTORS[sector[i]], shares[i] * fv[i], mcap_now[i]) for i in order[half:]])
+        for as_of in list_dates:
+            if day.date() <= as_of and (t == T - 1 or days[t + 1].date() > as_of) and as_of <= spec.end:
+                listed_now = np.where(active)[0]
+                _write_mcap_list(raw, spec, as_of, d,
+                                 [(symbol[i], i, mcap_now[i] if trade[i] else np.nan) for i in listed_now],
+                                 rank_only=spec.rank_only_until is not None and as_of <= spec.rank_only_until,
+                                 order_by=np.array([np.nan_to_num(mcap_now[i], nan=0.0) for i in listed_now]))
+
         # --- PR zip: corporate actions, market cap, band hits ---------------------------------
         listed = active
         last_trade = np.where(trade, t, last_trade)
@@ -456,7 +500,10 @@ def generate_fixture(root: Path, spec: Optional[FixtureSpec] = None) -> FixtureT
             r = float(np.sum(prev_mcap[member] * px_ret[member]) / np.sum(prev_mcap[member])) if member.any() else 0.0
             old = idx_level[name]
             idx_level[name] = old * (1 + r)
-            ind_rows.append((name, old, idx_level[name], r))
+            shown = name
+            if spec.index_rename and name == spec.index_rename[0] and d < spec.index_rename[2]:
+                shown = spec.index_rename[1]  # the index's earlier name
+            ind_rows.append((shown, old, idx_level[name], r))
         _write_ind(raw, spec, d, ind_rows, vix=14 + 900 * abs(mkt[t]) + rng.uniform(0, 3))
 
         prev_close = np.where(trade, close, prev_close)
@@ -540,12 +587,15 @@ def _write_bhav(raw, spec, d, sym, ser, isin, opn, hi, lo, close, pc, vol, val, 
     lines = []
     if d < UDIFF_SWITCH_DATE:
         stamp = f"{d:%d-%b-%Y}".upper()
+        with_isin = spec.isin_from is None or d >= spec.isin_from
         for k in range(len(sym)):
+            tail = f"{max(1, int(vol[k] // 150))},{isin[k]}," if with_isin else ""
             lines.append(f"{sym[k]},{ser[k]},{opn[k]:.2f},{hi[k]:.2f},{lo[k]:.2f},{close[k]:.2f},{close[k]:.2f},"
-                         f"{pc[k]:.2f},{vol[k]:.0f},{val[k]:.2f},{stamp},{max(1, int(vol[k] // 150))},{isin[k]},")
+                         f"{pc[k]:.2f},{vol[k]:.0f},{val[k]:.2f},{stamp},{tail}")
         for s, sr, isn, px in extra:
-            lines.append(f"{s},{sr},{px:.2f},{px:.2f},{px:.2f},{px:.2f},{px:.2f},{px:.2f},1000,{1000 * px:.2f},{stamp},10,{isn},")
-        text = LEGACY_HEADER + "\n" + "\n".join(lines) + "\n"
+            tail = f"10,{isn}," if with_isin else ""
+            lines.append(f"{s},{sr},{px:.2f},{px:.2f},{px:.2f},{px:.2f},{px:.2f},{px:.2f},1000,{1000 * px:.2f},{stamp},{tail}")
+        text = (LEGACY_HEADER if with_isin else LEGACY_HEADER_NO_ISIN) + "\n" + "\n".join(lines) + "\n"
     else:
         iso = d.isoformat()
         def row(s, sr, isn, o, h, l, c, p, v, tv):  # noqa: E741
@@ -573,13 +623,66 @@ def _write_pr(raw, spec, d, days, bc, sym, ser, comp, fv, shares, close, last_tr
         mc_lines.append(f"{stamp},{sym[k]},{ser[k]},SYNTHETIC COMPANY {comp[k]:04d},Listed,{lt_txt},{fv[k]:g},"
                         f"{shares[k]:.0f},{px:.2f},{px * shares[k]:.2f}")
     bh_lines = [f"{hit_sym[k]},{hit_ser[k]},SYNTHETIC,{'H' if hit[k] > 0 else 'L'},N" for k in range(len(hit_sym))]
+    # The real member names changed over the years (six or eight date digits, either case) and the
+    # band-hit file once headed its series column "SR"; the fixture uses each variant in turn.
+    first_year = d.year == spec.start.year
+    recent = d >= UDIFF_SWITCH_DATE
     members = {
-        f"Bc{d:%d%m%y}.csv": BC_HEADER + "\n" + "\n".join(bc_lines) + "\n",
-        f"MCAP{d:%d%m%Y}.csv": MCAP_HEADER + "\n" + "\n".join(mc_lines) + "\n",
-        f"Bh{d:%d%m%y}.csv": BH_HEADER + "\n" + "\n".join(bh_lines) + "\n",
+        (f"bc{d:%d%m%Y}.csv" if recent else f"Bc{d:%d%m%y}.csv"): BC_HEADER + "\n" + "\n".join(bc_lines) + "\n",
+        (f"bh{d:%d%m%Y}.csv" if (first_year or recent) else f"bh{d:%d%m%y}.csv"):
+            (BH_HEADER_OLD if first_year else BH_HEADER) + "\n" + "\n".join(bh_lines) + "\n",
         "Readme.txt": README_TEXT,
     }
+    if spec.mcap_daily_from is None or d >= spec.mcap_daily_from:
+        members[f"MCAP{d:%d%m%Y}.csv"] = MCAP_HEADER + "\n" + "\n".join(mc_lines) + "\n"
     _dest(raw, spec, "pr", d).write_bytes(_zip_bytes(members))
+
+
+def _write_mcwb(raw, spec, d, first, second) -> None:
+    """Monthly index file: the fixture's large caps, split over the two member files."""
+    rf = monthly_file("mcwb", d.year, d.month)
+    path = raw / (rf.local_rel if spec.layout == "raw" else rf.url_path.lstrip("/"))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    old_style = d.year == spec.start.year  # earlier layout: other member names, a units row, a folder
+    month = f"{d:%B %Y}"
+
+    def text(title: str, rows) -> str:
+        total = sum(r[4] for r in rows) or 1.0
+        body = [f"{k},{sym},Synthetic Company {i:04d} Ltd.,{ind.upper()},{eq:.0f},{cap / 1e7:.2f},{100 * cap / total:.2f},"
+                f"1.00,0.30,1.50,0.50,0.05" for k, (sym, i, ind, eq, cap) in enumerate(rows, start=1)]
+        header = MCWB_HEADER_OLD.format(month=month) if old_style else MCWB_HEADER
+        note = f"* Impact Cost for {title} is the weightage average impact cost,,,,,,,,,,,"
+        return f"Annexure II- {title} Index : {month},,,,,,,,,,,\n,,,,,,,,,,,\n{header}\n" + "\n".join(body) + f"\n,,,,,,,,,,,\n{note}\n"
+
+    if old_style:
+        folder = path.stem
+        members = {f"{folder}/niftymcwb.csv": text("CNX Nifty", first), f"{folder}/jrniftymcwb.csv": text("CNX Nifty Jr.", second)}
+    else:
+        members = {"nifty50_mcwb.csv": text("Nifty 50", first), "niftynext50_mcwb.csv": text("Nifty Next 50", second)}
+    path.write_bytes(_zip_bytes(members))
+
+
+def _write_mcap_list(raw, spec, as_of, d, rows, rank_only: bool, order_by) -> None:
+    """"Market capitalisation - all companies" list as on ``as_of`` (spreadsheet, as published)."""
+    name = MCAP_LIST_FILES.get(as_of.isoformat(), f"MCAP{as_of:%d%m%Y}.xlsx")
+    path = raw / (f"mcap_lists/{name}" if spec.layout == "raw" else f"{MCAP_LIST_DIR.lstrip('/')}/{name}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    order = np.argsort(-np.asarray(order_by), kind="stable")
+    stamp = f"{d:%B} {d.day}, {d.year}"
+    table = []
+    for k, j in enumerate(order, start=1):
+        sym, i, cap = rows[j]
+        line = [k, sym, f"Synthetic Company {i:04d} Limited"]
+        if not rank_only:
+            line.append(round(cap / 1e5, 6) if np.isfinite(cap) else f"* Not Traded as on {stamp}")
+        table.append(line)
+    if rank_only:
+        frame = pd.DataFrame([[f"Top {len(table)} Companies based on Market Capitalisation as on {stamp}", None, None],
+                              ["Sr. No.", "Symbol", "Security Name"]] + table)
+    else:
+        frame = pd.DataFrame([["Sr. No.", "Symbol", "Company Name", f"Market capitalization as on {stamp}\n(Rs in Lakhs)"]]
+                             + table + [[None] * 4, ["Note: Kindly refer regulation 15 to the listing regulations", None, None, None]])
+    frame.to_excel(path, index=False, header=False, sheet_name="Sheet1")
 
 
 def _write_ind(raw, spec, d, rows, vix: float) -> None:

@@ -39,6 +39,7 @@ from dataclasses import dataclass, field
 from typing import Dict, Optional
 
 import numpy as np
+import pandas as pd
 
 from .config import SignalCfg, SignalComponent
 from .market import MarketData
@@ -72,15 +73,56 @@ def _traded_fraction(md: MarketData, i0: int, i1: int) -> np.ndarray:
     return (cum[i1 + 1] - cum[i0 + 1]) / max(1, i1 - i0)
 
 
+BROAD_INDICES = ("NIFTY 500", "NIFTY 200", "NIFTY 100", "NIFTY 50")  # fallbacks for the market return
+MARKET_CAP_COVERAGE = 0.8  # share of the day's traded stocks that must have a market cap
+
+
 def market_return(md: MarketData) -> np.ndarray:
-    """Cap-weighted daily return of all traded stocks, using yesterday's market caps."""
+    """Daily return of the whole market, from data known the day before.
+
+    The cap-weighted return of all traded stocks (yesterday's market caps) is
+    used whenever at least ``MARKET_CAP_COVERAGE`` of the day's stocks have a
+    market cap. The exchange publishes market caps only from 2020 (see
+    ``data/size.py``), so for earlier days the return of the broadest exchange
+    index in the data is used instead, and where there is no index either (the
+    index file starts in 2012) the traded-value-weighted return of all stocks.
+    ``market_return_sources`` reports which was used when.
+    """
+    return _market_return(md)[0]
+
+
+def market_return_sources(md: MarketData) -> pd.DataFrame:
+    """Which market proxy was used over which dates: one row per unbroken run of days."""
+    labels = np.array(["cap_weighted", "exchange_index", "traded_value_weighted", "none"], dtype=object)
+    code = _market_return(md)[1]
+    run = np.concatenate([[0], np.cumsum(code[1:] != code[:-1])])
+    out = pd.DataFrame({"date": md.dates, "source": labels[code], "run": run}).groupby("run").agg(
+        source=("source", "first"), first_day=("date", "first"), last_day=("date", "last"), days=("date", "size"))
+    out.attrs["index_used"] = _market_return(md)[2]
+    return out.reset_index(drop=True)
+
+
+def _market_return(md: MarketData):
     def make():
-        w = np.vstack([np.full((1, md.N), np.nan), md.mcap_ff[:-1]])
-        ok = np.isfinite(md.ret) & np.isfinite(w)
-        num = np.where(ok, md.ret * w, 0.0).sum(axis=1)
-        den = np.where(ok, w, 0.0).sum(axis=1)
-        with np.errstate(invalid="ignore", divide="ignore"):
-            return np.where(den > 0, num / den, np.nan)
+        has_ret = np.isfinite(md.ret)
+
+        def weighted(w_today: np.ndarray):
+            w = np.vstack([np.full((1, md.N), np.nan), w_today[:-1]])  # yesterday's weights
+            ok = has_ret & np.isfinite(w) & (w > 0)
+            num = np.where(ok, md.ret * w, 0.0).sum(axis=1)
+            den = np.where(ok, w, 0.0).sum(axis=1)
+            with np.errstate(invalid="ignore", divide="ignore"):
+                coverage = ok.sum(axis=1) / np.maximum(1, has_ret.sum(axis=1))
+                return np.where(den > 0, num / den, np.nan), coverage
+
+        cap, coverage = weighted(md.mcap_ff)
+        use_cap = np.isfinite(cap) & (coverage >= MARKET_CAP_COVERAGE)
+        index_name = next((n for n in BROAD_INDICES if n in md.indices.columns), None)
+        index = md.index_return(index_name) if index_name else np.full(md.T, np.nan)
+        value, _ = weighted(md.median_value(126))
+        out = np.where(use_cap, cap, np.where(np.isfinite(index), index, value))
+        code = np.where(use_cap, 0, np.where(np.isfinite(index), 1, np.where(np.isfinite(value), 2, 3)))
+        return out, code, index_name
     return md._cache(("market_return",), make)
 
 
