@@ -1,94 +1,94 @@
 symbol,sector
-SYN0000,Information Technology
-SYN0001,Healthcare
-SYN0002,Capital Goods
-SYN0003,Consumer Durables
-SYN0004,Construction Materials
+SYN0000,Metals & Mining
+SYN0001,Power
+SYN0002,Power
+SYN0003,Financial Services
+SYN0004,Chemicals
 SYN0005,Chemicals
-SYN0006,Power
+SYN0006,Healthcare
 SYN0007,Automobile and Auto Components
-SYN0008,Power
-SYN0009,Fast Moving Consumer Goods
-SYN0010,Metals & Mining
-SYN0011,Healthcare
+SYN0008,Textiles
+SYN0009,Healthcare
+SYN0010,Power
+SYN0011,Financial Services
 SYN0012,Fast Moving Consumer Goods
-SYN0013,Construction Materials
-SYN0013X,Construction Materials
-SYN0014,Textiles
-SYN0015,Textiles
-SYN0016,Power
-SYN0017,Information Technology
-SYN0018,Construction Materials
-SYN0019,Chemicals
-SYN0020,Metals & Mining
-SYN0021,Capital Goods
-SYN0022,Financial Services
-SYN0023,Financial Services
+SYN0013,Metals & Mining
+SYN0014,Metals & Mining
+SYN0015,Power
+SYN0016,Consumer Durables
+SYN0017,Automobile and Auto Components
+SYN0018,Metals & Mining
+SYN0019,Fast Moving Consumer Goods
+SYN0020,Power
+SYN0021,Financial Services
+SYN0022,Healthcare
+SYN0023,Consumer Durables
 SYN0024,Power
-SYN0025,Textiles
-SYN0026,Capital Goods
+SYN0025,Metals & Mining
+SYN0026,Metals & Mining
 SYN0027,Chemicals
-SYN0028,Healthcare
+SYN0027X,Chemicals
+SYN0028,Textiles
 SYN0029,Information Technology
-SYN0030,Textiles
-SYN0031,Metals & Mining
-SYN0032,Financial Services
-SYN0033,Healthcare
-SYN0034,Consumer Durables
-SYN0035,Textiles
+SYN0030,Construction Materials
+SYN0031,Fast Moving Consumer Goods
+SYN0032,Capital Goods
+SYN0033,Power
+SYN0034,Information Technology
+SYN0035,Chemicals
 SYN0036,Power
-SYN0037,Healthcare
-SYN0038,Fast Moving Consumer Goods
-SYN0039,Financial Services
-SYN0040,Healthcare
-SYN0041,Healthcare
-SYN0042,Chemicals
-SYN0043,Automobile and Auto Components
-SYN0043X,Automobile and Auto Components
+SYN0037,Construction Materials
+SYN0038,Healthcare
+SYN0039,Automobile and Auto Components
+SYN0040,Textiles
+SYN0041,Capital Goods
+SYN0042,Consumer Durables
+SYN0043,Metals & Mining
 SYN0044,Metals & Mining
-SYN0045,Chemicals
-SYN0046,Automobile and Auto Components
-SYN0047,Textiles
-SYN0048,Fast Moving Consumer Goods
-SYN0049,Metals & Mining
-SYN0050,Metals & Mining
-SYN0051,Automobile and Auto Components
-SYN0052,Textiles
-SYN0053,Financial Services
-SYN0054,Capital Goods
-SYN0055,Information Technology
-SYN0056,Financial Services
-SYN0057,Power
-SYN0058,Information Technology
-SYN0059,Chemicals
-SYN0060,Construction Materials
-SYN0061,Metals & Mining
+SYN0045,Capital Goods
+SYN0046,Consumer Durables
+SYN0047,Fast Moving Consumer Goods
+SYN0048,Consumer Durables
+SYN0049,Textiles
+SYN0050,Healthcare
+SYN0051,Textiles
+SYN0052,Capital Goods
+SYN0053,Textiles
+SYN0054,Construction Materials
+SYN0055,Financial Services
+SYN0056,Textiles
+SYN0057,Consumer Durables
+SYN0058,Automobile and Auto Components
+SYN0059,Power
+SYN0060,Information Technology
+SYN0061,Consumer Durables
 SYN0062,Textiles
-SYN0063,Financial Services
-SYN0064,Chemicals
-SYN0065,Financial Services
-SYN0066,Healthcare
-SYN0067,Textiles
-SYN0068,Financial Services
-SYN0069,Fast Moving Consumer Goods
-SYN0070,Financial Services
-SYN0071,Capital Goods
-SYN0072,Power
-SYN0073,Capital Goods
-SYN0074,Capital Goods
-SYN0075,Information Technology
-SYN0076,Construction Materials
-SYN0077,Healthcare
-SYN0078,Chemicals
-SYN0079,Financial Services
-SYN0079X,Financial Services
-SYN0080,Financial Services
-SYN0081,Textiles
-SYN0082,Financial Services
+SYN0063,Capital Goods
+SYN0064,Power
+SYN0065,Power
+SYN0066,Automobile and Auto Components
+SYN0067,Chemicals
+SYN0068,Textiles
+SYN0069,Healthcare
+SYN0070,Fast Moving Consumer Goods
+SYN0071,Metals & Mining
+SYN0072,Metals & Mining
+SYN0072X,Metals & Mining
+SYN0073,Fast Moving Consumer Goods
+SYN0074,Power
+SYN0075,Power
+SYN0076,Capital Goods
+SYN0077,Capital Goods
+SYN0078,Automobile and Auto Components
+SYN0079,Chemicals
+SYN0080,Information Technology
+SYN0081,Metals & Mining
+SYN0082,Power
 SYN0083,Chemicals
-SYN0084,Chemicals
-SYN0085,Information Technology
-SYN0086,Fast Moving Consumer Goods
-SYN0087,Metals & Mining
-SYN0088,Power
-SYN0089,Healthcare
+SYN0084,Automobile and Auto Components
+SYN0085,Capital Goods
+SYN0086,Financial Services
+SYN0086X,Financial Services
+SYN0087,Power
+SYN0088,Automobile and Auto Components
+SYN0089,Textiles

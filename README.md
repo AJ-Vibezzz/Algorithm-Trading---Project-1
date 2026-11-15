@@ -124,7 +124,7 @@ URL patterns were cross-checked against the open-source `nse` and `jugaad-data` 
 
 ## Status
 
-- The automated tests pass on synthetic data written in the real NSE file layouts.
+- The automated tests (106) pass on synthetic data written in the real NSE file layouts, under Python 3.13 with pandas 2.2 / NumPy 2.1 and with pandas 3.0 / NumPy 2.5.
 - **The code has not yet been run on real NSE files**: the environment in which it was built could not reach the exchange. Expect to fix small layout differences on first contact with real data; `docs/01_data_requirements.md` lists what to check first.
 
 ## Licence and disclaimer

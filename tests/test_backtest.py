@@ -54,16 +54,17 @@ def test_liquidity_cap_is_respected(ws, cfg, net):
     assert (net.blocks["reason"] == "liquidity_cap").sum() > 0, "the fixture must actually exercise the cap"
 
 
-def test_circuit_locks_and_non_trading_days_block_fills(ws, net):
+def test_circuit_locks_and_non_trading_days_block_fills(ws, net, broad):
     md = ws.md
-    rows, cols = _locate(md, net.trades)
-    lock = md.lock[rows, cols]
-    side = net.trades["side"].to_numpy()
-    assert not ((side == "BUY") & (lock == 1)).any(), "no buying a stock pinned at its upper band"
-    assert not ((side == "SELL") & (lock == -1)).any(), "no selling a stock pinned at its lower band"
-    assert md.traded[rows, cols].all(), "no fill on a day the stock did not trade"
-    reasons = set(net.blocks["reason"])
-    assert {"upper_circuit", "lower_circuit", "no_trading"} & reasons, "the fixture must exercise these blocks"
+    for res in (net, broad):
+        rows, cols = _locate(md, res.trades)
+        lock = md.lock[rows, cols]
+        side = res.trades["side"].to_numpy()
+        assert not ((side == "BUY") & (lock == 1)).any(), "no buying a stock pinned at its upper band"
+        assert not ((side == "SELL") & (lock == -1)).any(), "no selling a stock pinned at its lower band"
+        assert md.traded[rows, cols].all(), "no fill on a day the stock did not trade"
+    reasons = set(broad.blocks["reason"])
+    assert {"upper_circuit", "lower_circuit", "no_trading"} <= reasons, "a book holding everything meets all three"
 
 
 def test_trade_prices_lie_inside_the_days_range(ws, net):
@@ -104,9 +105,10 @@ def test_bigger_fund_pays_more_impact_and_fills_less(ws, cfg):
     assert fill(big) < fill(small)
 
 
-def test_writeoffs_follow_the_delisting_inputs(ws, cfg, net):
-    w = net.writeoffs
-    assert len(w) >= 1, "the fixture delists companies while they are held"
+def test_writeoffs_follow_the_delisting_inputs(ws, cfg, broad):
+    w = broad.writeoffs
+    assert len(w) >= 3, "a book holding everything must be caught in some of the fixture's delistings"
+    assert (w["proceeds"] <= w["carrying_value"] * 1.06).all()
     assert np.allclose(w["proceeds"], w["carrying_value"] * (1 + w["terminal_return"]))
     for row in w.itertuples():
         if row.source == "assumption":
@@ -124,17 +126,53 @@ def test_orders_end_in_a_known_state(net):
     assert not sells["status"].str.startswith("expired").any(), "sell orders are worked until done - they never lapse"
 
 
-def test_stop_loss_and_drawdown_rules_fire(ws, cfg):
-    trial = cfg.with_overrides({"risk.stop_loss.enabled": True, "risk.stop_loss.threshold": 0.12,
-                                "risk.drawdown.soft_limit": 0.05, "risk.drawdown.hard_limit": 0.10,
-                                "risk.drawdown.hard_exposure": 0.0, "risk.drawdown.cooloff_days": 10})
-    res = run_backtest(ws, trial, trial.sample.train_start, trial.sample.test_end)
-    events = set(res.risk_events["event"])
-    assert "stop_loss" in events and "hard_limit_breached" in events and "rebase_after_cooloff" in events
-    assert (res.orders["reason"] == "stop_loss").sum() > 0 and (res.orders["reason"] == "drawdown_derisk").sum() > 0
-    after_hard = res.risk_events[res.risk_events["event"] == "hard_limit_breached"]["date"].iloc[0]
-    window = res.daily.loc[after_hard:].iloc[6:10]
-    assert window["exposure"].max() < 0.35, "a hard breach with zero exposure must take the book (almost) to cash"
+def test_stop_loss_exits_and_cools_down(ws, cfg):
+    """A tight trailing stop must fire on volatile small caps, sell the whole position and block re-entry."""
+    trial = cfg.with_overrides({"risk.stop_loss.enabled": True, "risk.stop_loss.kind": "trailing",
+                                "risk.stop_loss.threshold": 0.08, "risk.stop_loss.cooldown_days": 30})
+    res = run_backtest(ws, trial, trial.sample.train_start, trial.sample.train_end)
+    stops = res.risk_events[res.risk_events["event"] == "stop_loss"]
+    assert len(stops) >= 5
+    stop_orders = res.orders[res.orders["reason"] == "stop_loss"]
+    assert len(stop_orders) == len(stops) and (stop_orders["side"] == "SELL").all()
+    assert (stop_orders["kind"] == "exit").all()
+    # no purchase of a stopped-out stock while it is in cool-down
+    md = ws.md
+    buys = res.trades[res.trades["side"] == "BUY"]
+    for ev in stops.itertuples():
+        t0 = md.loc(ev.date)
+        again = buys[(buys["symbol"] == ev.symbol) & (buys["date"] > ev.date)
+                     & (buys["date"] <= md.dates[min(t0 + 30, md.T - 1)])]
+        assert again.empty, f"{ev.symbol} was bought back inside its cool-down"
+
+
+def test_drawdown_tiers_cut_exposure_then_rebase(ws, cfg):
+    """Set the hard limit inside the drawdown the unconstrained book is known to suffer: it must trigger."""
+    small = RunOptions("small", capital=2e7)  # small enough that de-risking sells fill within days
+    off = cfg.with_overrides({"risk.drawdown.soft_limit": 0.98, "risk.drawdown.hard_limit": 0.99})
+    base = run_backtest(ws, off, off.sample.train_start, off.sample.test_end, small)
+    assert set(base.risk_events["event"]) == set(), "with limits out of reach nothing may trigger"
+    worst = abs(float((base.nav / base.nav.cummax() - 1.0).min()))
+    assert worst > 0.05
+
+    hard = 0.6 * worst
+    on = cfg.with_overrides({"risk.drawdown.soft_limit": 0.3 * worst, "risk.drawdown.soft_exposure": 1.0,
+                             "risk.drawdown.hard_limit": hard, "risk.drawdown.hard_exposure": 0.0,
+                             "risk.drawdown.cooloff_days": 15})
+    res = run_backtest(ws, on, on.sample.train_start, on.sample.test_end, small)
+    events = res.risk_events
+    assert {"soft_limit_breached", "hard_limit_breached", "rebase_after_cooloff"} <= set(events["event"])
+    breach = events[events["event"] == "hard_limit_breached"]["date"].iloc[0]
+    rebase = events[(events["event"] == "rebase_after_cooloff") & (events["date"] > breach)]["date"].iloc[0]
+    # the soft tier keeps full exposure here, so the path equals the unconstrained one up to the hard breach
+    before = res.daily.index[res.daily.index <= breach]
+    assert (res.daily.loc[before, "nav"] - base.daily.loc[before, "nav"]).abs().max() < 1e-6
+    assert res.nav.loc[breach] / res.nav.loc[:breach].max() - 1.0 <= -hard
+    assert (res.orders["reason"] == "drawdown_derisk").sum() > 0
+    # after the breach the book goes (almost) to cash and stays there until the cooling-off period ends
+    cooling = res.daily.loc[breach:rebase].iloc[10:]
+    assert len(cooling) >= 5 and cooling["exposure"].max() < 0.20
+    assert res.daily.index.get_loc(rebase) - res.daily.index.get_loc(breach) == 15
 
 
 def test_overlapping_tranches_and_vol_target_run(ws, cfg):

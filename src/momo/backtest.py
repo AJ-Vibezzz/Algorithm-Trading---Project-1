@@ -143,6 +143,7 @@ class Backtester:
         banned_until = np.full(N, -1)
         base_target: Optional[np.ndarray] = None
         dd = DrawdownController(rk.drawdown, capital)
+        dd_multiplier_in_force = 1.0  # the drawdown multiplier applied at the latest decision or de-risking
         hedge_notional = 0.0
 
         orders: List[dict] = []
@@ -382,13 +383,18 @@ class Backtester:
                 risk_events.append({"date": date, "event": event, "symbol": "",
                                     "detail": f"drawdown {nav / dd.hwm - 1.0:.1%}; exposure multiplier {dd.multiplier:.2f}"})
             is_decision = t in self.decision_set
-            if event in ("soft_limit_breached", "hard_limit_breached") and base_target is not None and not is_decision:
+            # De-risk only when the tier actually lowers the exposure multiplier now in force.
+            lower = dd.multiplier < dd_multiplier_in_force - 1e-12
+            if event in ("soft_limit_breached", "hard_limit_breached") and lower and base_target is not None \
+                    and not is_decision:
                 place_orders(t, base_target * dd.multiplier, nav, reason="drawdown_derisk", sells_only=True)
+                dd_multiplier_in_force = dd.multiplier
 
             # --- 4. rebalance decision --------------------------------------------------------------------------
             if is_decision:
                 dec = self.strategy.decide(t, dd.multiplier, banned_until > t)
                 base_target = dec.base_weights.copy()
+                dd_multiplier_in_force = dd.multiplier
                 place_orders(t, dec.weights, nav, reason="rebalance")
                 if rk.hedge.enabled:
                     beta = max(float(dec.info.get("beta_full", 1.0)), 0.0)

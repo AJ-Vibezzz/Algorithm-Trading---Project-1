@@ -1,10 +1,8 @@
 symbol,terminal_return,reason
-SYN0002,0.05,voluntary
-SYN0030,0.0,merger
-SYN0036,-0.8,distress
-SYN0047,-0.8,distress
-SYN0050,0.0,merger
-SYN0068,-0.8,distress
-SYN0070,0.0,merger
-SYN0083,0.05,voluntary
-SYN0087,0.05,voluntary
+SYN0007,-0.8,distress
+SYN0020,-0.8,distress
+SYN0022,0.0,merger
+SYN0033,-0.8,distress
+SYN0039,0.05,voluntary
+SYN0057,-0.8,distress
+SYN0087,0.0,merger

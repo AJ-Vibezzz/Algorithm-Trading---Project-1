@@ -97,6 +97,18 @@ def net(ws, cfg):
 
 
 @pytest.fixture(scope="session")
+def broad(ws, cfg):
+    """A back-test that holds every eligible stock (hundreds of small positions).
+
+    Used by the tests of rare events - circuit blocks, non-trading days,
+    delisting write-offs - which a 20-stock book might not meet on a given
+    random path. Holding everything makes them certain to occur.
+    """
+    wide = cfg.with_overrides({"portfolio.selection": "top_fraction", "portfolio.top_fraction": 1.0})
+    return run_backtest(ws, wide, wide.sample.train_start, wide.sample.test_end)
+
+
+@pytest.fixture(scope="session")
 def truth(fixture_root):
     return {name: pd.read_parquet(fixture_root / f"truth_{name}.parquet")
             for name in ("returns", "actions", "companies")}
