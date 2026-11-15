@@ -31,7 +31,8 @@ import pandas as pd
 import requests
 
 from ..config import DataConfig
-from .sources import RemoteFile, candidate_dates, remote_file, static_files
+from .sources import (CATALOGUE_DATASETS, DAILY_DATASETS, MONTHLY_DATASETS, RemoteFile, candidate_dates,
+                      catalogue_files, monthly_files, remote_file, static_files)
 
 try:  # progress bar is optional
     from tqdm import tqdm
@@ -52,6 +53,11 @@ BROWSER_HEADERS = {
 
 MANIFEST_NAME = "_manifest.csv"
 MANIFEST_COLS = ["dataset", "date", "status", "bytes", "http_status", "url", "checked_at"]
+SAVE_EVERY = 400  # manifest rows between saves, so an interrupted run keeps what it learnt
+# A "not found" answer is only final once the file has had time to be published: the daily
+# files appear in the evening, the monthly index file up to several weeks after the month-end.
+SETTLE_DAYS = {"mcwb": 75}
+SETTLE_DAYS_DEFAULT = 5
 
 
 def _looks_valid(content: bytes, kind: str) -> bool:
@@ -135,6 +141,18 @@ class Downloader:
             return pd.read_csv(self.manifest_path, dtype=str)
         return pd.DataFrame(columns=MANIFEST_COLS)
 
+    @staticmethod
+    def _settled_missing(manifest: pd.DataFrame) -> set:
+        """(dataset, date) pairs known to have no file - asked long enough after the date to be sure."""
+        if manifest.empty:
+            return set()
+        m = manifest[manifest["status"] == "missing"]
+        file_date = pd.to_datetime(m["date"], errors="coerce")
+        asked = pd.to_datetime(m["checked_at"], errors="coerce")
+        wait = m["dataset"].map(SETTLE_DAYS).fillna(SETTLE_DAYS_DEFAULT)
+        settled = (asked - file_date).dt.days > wait
+        return set(zip(m.loc[settled, "dataset"], m.loc[settled, "date"]))
+
     def _save_manifest(self, old: pd.DataFrame, new_rows: List[dict]) -> pd.DataFrame:
         new = pd.DataFrame(new_rows, columns=MANIFEST_COLS).astype(str)
         merged = pd.concat([old, new], ignore_index=True)
@@ -166,36 +184,47 @@ class Downloader:
             raise ValueError("No start date: set download_start in config/data.yaml or pass start=")
         datasets = list(datasets or self.cfg.datasets)
 
+        unknown = [ds for ds in datasets if ds not in DAILY_DATASETS + MONTHLY_DATASETS + CATALOGUE_DATASETS]
+        if unknown:
+            raise KeyError(f"Unknown dataset(s) {unknown}")
+
         old = self.load_manifest()
-        skip = set()
-        if not retry_missing and len(old):
-            m = old[old["status"] == "missing"]
-            skip = set(zip(m["dataset"], m["date"]))
+        skip = set() if retry_missing else self._settled_missing(old)
 
         todo: List[RemoteFile] = []
-        for d in candidate_dates(start, end, include_weekends):
-            for ds in datasets:
-                if (ds, d.isoformat()) in skip:
-                    continue
-                todo.append(remote_file(ds, d))
+        daily = [ds for ds in datasets if ds in DAILY_DATASETS]
+        for d in candidate_dates(start, end, include_weekends) if daily else []:
+            for ds in daily:
+                if (ds, d.isoformat()) not in skip:
+                    todo.append(remote_file(ds, d))
+        for ds in datasets:
+            if ds in MONTHLY_DATASETS:
+                todo += [rf for rf in monthly_files(ds, start, end) if (ds, rf.date.isoformat()) not in skip]
+            elif ds in CATALOGUE_DATASETS:
+                todo += [rf for rf in catalogue_files(ds) if (ds, rf.date.isoformat()) not in skip]
         if include_static:
             todo += static_files()
 
         rows: List[dict] = []
         blocked = False
+        manifest = old
         bar = tqdm(total=len(todo), desc="NSE download", unit="file") if (tqdm and progress) else None
-        with ThreadPoolExecutor(max_workers=max(1, self.cfg.max_workers)) as pool:
-            futures = [pool.submit(self._fetch, rf) for rf in todo]
-            for fut in as_completed(futures):
-                row = fut.result()
-                rows.append(row)
-                blocked = blocked or row["status"] == "blocked"
-                if bar:
-                    bar.update(1)
-        if bar:
-            bar.close()
-
-        manifest = self._save_manifest(old, rows)
+        try:
+            with ThreadPoolExecutor(max_workers=max(1, self.cfg.max_workers)) as pool:
+                futures = [pool.submit(self._fetch, rf) for rf in todo]
+                for fut in as_completed(futures):
+                    row = fut.result()
+                    rows.append(row)
+                    blocked = blocked or row["status"] == "blocked"
+                    if bar:
+                        bar.update(1)
+                    if len(rows) >= SAVE_EVERY:  # keep progress if the run is interrupted
+                        manifest = self._save_manifest(manifest, rows)
+                        rows = []
+        finally:
+            if bar:
+                bar.close()
+            manifest = self._save_manifest(manifest, rows)
         if blocked:
             print(
                 "\nWARNING: the NSE archive refused some requests (HTTP 401/403). "

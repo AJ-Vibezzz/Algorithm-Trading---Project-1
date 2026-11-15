@@ -300,7 +300,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--data-config", default=DEFAULT_DATA)
     sp.add_argument("--start", help="YYYY-MM-DD (default: download_start in the data config)")
     sp.add_argument("--end", help="YYYY-MM-DD (default: today)")
-    sp.add_argument("--datasets", nargs="*", help="subset of: cm_bhav pr ind_close fo_bhav sec_list")
+    sp.add_argument("--datasets", nargs="*", help="subset of: cm_bhav pr ind_close mcwb mcap_lists fo_bhav sec_list")
     sp.add_argument("--retry-missing", action="store_true", help="ask again for dates recorded as missing")
     sp.add_argument("--quiet", action="store_true")
     sp.set_defaults(func=cmd_download)

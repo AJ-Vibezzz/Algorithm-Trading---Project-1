@@ -36,6 +36,8 @@ CORP_ACTION_COLUMNS = ["symbol", "series", "security", "ex_date", "record_date",
 MCAP_COLUMNS = ["date", "symbol", "series", "face_value", "shares", "mcap", "mcap_close", "category"]
 BAND_HIT_COLUMNS = ["date", "symbol", "series", "hit"]
 INDEX_COLUMNS = ["date", "index_name", "open", "high", "low", "close", "pe", "pb", "div_yield"]
+MCAP_LIST_COLUMNS = ["as_of", "symbol", "company", "rank", "mcap"]
+INDEX_WEIGHT_COLUMNS = ["as_of", "index_name", "symbol", "company", "industry", "equity_capital", "ff_mcap", "weight"]
 
 
 # --------------------------------------------------------------------------- #
@@ -239,7 +241,7 @@ def parse_band_hits(raw: bytes, date: dt.date) -> pd.DataFrame:
     """``Bh*.csv``: securities that touched their upper (H) or lower (L) price band."""
     df = _read_table(raw, ["SYMBOL"])
     sym = _pick(df, "SYMBOL")
-    ser = _pick(df, "SERIES")
+    ser = _pick(df, "SERIES", "SR")  # the series column is headed "SR" in the oldest archives
     hit = _pick(df, "HIGH_LOW", contains=["HIGH"])
     if sym is None or hit is None:
         raise ParseError("band-hit file lacks SYMBOL / HIGH-LOW flag")
@@ -255,10 +257,14 @@ def parse_band_hits(raw: bytes, date: dt.date) -> pd.DataFrame:
     return to_ns(out[BAND_HIT_COLUMNS].drop_duplicates().reset_index(drop=True))
 
 
+# Member names inside the PR zip changed over the years: the date part is six
+# digits (ddmmyy) in most archives and eight (ddmmyyyy) in others - for example
+# ``Bc030111.csv`` but ``bh03012011.csv`` in 2011, and ``bc30102026.csv`` in 2026 -
+# and the case of the prefix varies. Match on prefix + 6-8 digits, any case.
 _PR_MEMBERS = {
-    "corp_actions": (re.compile(r"^bc\d{6}\.csv$"), parse_corp_actions),
+    "corp_actions": (re.compile(r"^bc\d{6,8}\.csv$"), parse_corp_actions),
     "mcap": (re.compile(r"^mcap\d{6,8}\.csv$"), parse_mcap),
-    "band_hits": (re.compile(r"^bh\d{6}\.csv$"), parse_band_hits),
+    "band_hits": (re.compile(r"^bh\d{6,8}\.csv$"), parse_band_hits),
 }
 
 
@@ -310,6 +316,160 @@ def parse_ind_close(path: Path, date: dt.date) -> pd.DataFrame:
     )
     out = out[(out["index_name"] != "") & out["close"].notna()]
     return to_ns(out[INDEX_COLUMNS].reset_index(drop=True))
+
+
+# --------------------------------------------------------------------------- #
+# Exchange market-capitalisation lists (all companies, as on a given date)
+# --------------------------------------------------------------------------- #
+_UNIT_RUPEES = (("LAKH", 1e5), ("CRORE", 1e7), ("CR", 1e7))
+
+
+def _grid(path: Path) -> pd.DataFrame:
+    """A spreadsheet or CSV as a grid of text cells, with no header assumed."""
+    suffix = str(path).lower().rsplit(".", 1)[-1]
+    if suffix in ("xlsx", "xlsm", "xls"):
+        try:
+            book = pd.ExcelFile(path)
+        except ImportError as exc:  # pragma: no cover - depends on the installation
+            raise ParseError(f"reading {suffix} files needs the 'openpyxl' package (pip install openpyxl)") from exc
+        return book.parse(book.sheet_names[0], header=None, dtype=str)
+    return pd.read_csv(io.StringIO(_decode(_read_bytes(path))), header=None, dtype=str,
+                       skipinitialspace=True, on_bad_lines="skip")
+
+
+def parse_mcap_list(path: Path, as_of: dt.date) -> pd.DataFrame:
+    """NSE "market capitalisation - all companies" list -> ``MCAP_LIST_COLUMNS``.
+
+    These are the lists the exchange publishes under the listing regulations
+    (which companies are in the top 100 / 500 / 1000 by market capitalisation):
+    one row per company with its rank and market capitalisation on the as-on
+    date. ``mcap`` is returned in rupees. Companies that did not trade on that
+    date carry a note instead of a number and come back as NaN, and the oldest
+    list (31 March 2019, top 1000) has ranks but no values at all, so ``mcap``
+    is NaN throughout for it and only ``rank`` can be used.
+    """
+    grid = _grid(Path(path))
+    header_at = None
+    for i in range(min(15, len(grid))):
+        cells = [_norm(v) for v in grid.iloc[i].tolist()]
+        if "SYMBOL" in cells:
+            header_at = i
+            break
+    if header_at is None:
+        raise ParseError("market-cap list has no header row with a 'Symbol' column")
+    names = [_norm(v) if isinstance(v, str) else "" for v in grid.iloc[header_at].tolist()]
+    body = grid.iloc[header_at + 1:].reset_index(drop=True)
+    body.columns = range(body.shape[1])
+
+    def col(*tokens: str) -> Optional[int]:
+        for j, name in enumerate(names):
+            if name and all(t in name for t in tokens):
+                return j
+        return None
+
+    c_sym, c_rank = names.index("SYMBOL"), col("SR")
+    c_name = col("COMPANY") if col("COMPANY") is not None else col("NAME")
+    c_cap = col("MARKET", "CAP")
+    scale = np.nan
+    if c_cap is not None:
+        for token, rupees in _UNIT_RUPEES:
+            if token in names[c_cap]:
+                scale = rupees
+                break
+        if not np.isfinite(scale):
+            raise ParseError(f"market-cap list: cannot tell the unit of '{grid.iloc[header_at, c_cap]}'")
+
+    out = pd.DataFrame(
+        {
+            "as_of": pd.Timestamp(as_of),
+            "symbol": _txt(body[c_sym]),
+            "company": body[c_name].fillna("").astype(str).str.strip() if c_name is not None else "",
+            "rank": _num(body[c_rank]) if c_rank is not None else np.nan,
+            "mcap": _num(body[c_cap]) * scale if c_cap is not None else np.nan,
+        }
+    )
+    out = out[(out["symbol"] != "") & (out["symbol"] != "NAN")]
+    if c_rank is not None:
+        out = out[out["rank"].notna()]  # drops the footnote rows under the table
+    else:
+        out["rank"] = np.arange(1, len(out) + 1, dtype=float)
+    if out.empty:
+        raise ParseError("market-cap list has no company rows")
+    return to_ns(out[MCAP_LIST_COLUMNS].drop_duplicates("symbol").reset_index(drop=True))
+
+
+# --------------------------------------------------------------------------- #
+# Monthly index files: members of the Nifty 50 and Nifty Next 50
+# --------------------------------------------------------------------------- #
+def _index_name_from_member(member: str) -> Optional[str]:
+    """'niftymcwb.csv' / 'nifty50_mcwb.csv' -> NIFTY 50; 'jrniftymcwb.csv' / 'niftynext50_mcwb.csv' -> NIFTY NEXT 50."""
+    base = member.rsplit("/", 1)[-1].lower()
+    if not base.endswith(".csv") or "mcwb" not in base:
+        return None
+    if "jr" in base or "junior" in base or "next" in base:
+        return "NIFTY NEXT 50"
+    if "nifty" in base:
+        return "NIFTY 50"
+    return None
+
+
+def parse_index_weights(path: Path, as_of: dt.date) -> pd.DataFrame:
+    """Monthly "market capitalisation, weightage, beta" zip -> ``INDEX_WEIGHT_COLUMNS``.
+
+    The exchange publishes one small zip per month (``mcwb_jan20.zip``) holding
+    the members of the Nifty 50 and of the Nifty Next 50 as at that month-end,
+    with each member's equity capital and free-float market capitalisation.
+    Together they are the Nifty 100 - a point-in-time list of the large caps,
+    available back to 2008. The index is named after the file inside the zip
+    (the index itself was renamed three times), so the output always says
+    ``NIFTY 50`` and ``NIFTY NEXT 50``. ``ff_mcap`` is in rupees.
+    """
+    import csv
+
+    frames = []
+    with zipfile.ZipFile(path) as zf:
+        for member in zf.namelist():
+            index_name = _index_name_from_member(member)
+            if index_name is None:
+                continue
+            rows = list(csv.reader(io.StringIO(_decode(zf.read(member)))))
+            header_at = next((i for i, r in enumerate(rows[:15]) if any("SYMBOL" in _norm(c) for c in r)), None)
+            if header_at is None:
+                raise ParseError(f"{member}: no header row with a symbol column")
+            names = [_norm(c) for c in rows[header_at]]
+
+            def col(*tokens: str, start: bool = False) -> Optional[int]:
+                for j, name in enumerate(names):
+                    if all(t in name for t in tokens) and (not start or name.startswith(tokens[0])):
+                        return j
+                return None
+
+            c_sym, c_name, c_ind = col("SYMBOL"), col("SECURITY", "NAME"), col("INDUSTRY")
+            c_eq, c_cap, c_wt = col("EQUITY", start=True), col("MARKET", "CAP"), col("WEIGHT")
+            recs = []
+            for r in rows[header_at + 1:]:
+                if not r or not r[0].strip().replace(".", "", 1).isdigit() or len(r) <= c_sym:
+                    continue  # the units row, blank rows and the footnotes
+
+                def cell(j: Optional[int]) -> str:
+                    return r[j].strip() if j is not None and j < len(r) else ""
+
+                recs.append({"symbol": cell(c_sym).upper(), "company": cell(c_name), "industry": cell(c_ind),
+                             "equity_capital": cell(c_eq), "ff_mcap": cell(c_cap), "weight": cell(c_wt)})
+            if not recs:
+                raise ParseError(f"{member}: no member rows")
+            df = pd.DataFrame(recs)
+            df["index_name"] = index_name
+            frames.append(df)
+    if not frames:
+        raise ParseError("zip holds no index member file")
+    out = pd.concat(frames, ignore_index=True)
+    out["as_of"] = pd.Timestamp(as_of)
+    out["equity_capital"] = _num(out["equity_capital"])
+    out["ff_mcap"] = _num(out["ff_mcap"]) * 1e7  # published in Rs crore
+    out["weight"] = _num(out["weight"])
+    out = out[out["symbol"] != ""]
+    return to_ns(out[INDEX_WEIGHT_COLUMNS].drop_duplicates(["index_name", "symbol"]).reset_index(drop=True))
 
 
 # --------------------------------------------------------------------------- #

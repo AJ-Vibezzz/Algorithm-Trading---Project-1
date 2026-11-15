@@ -543,7 +543,7 @@ class DataConfig:
     root: str = "data"
     download_start: Optional[dt.date] = field(default=None, metadata={"date": True})
     download_end: Optional[dt.date] = field(default=None, metadata={"date": True})
-    datasets: List[str] = field(default_factory=lambda: ["cm_bhav", "pr", "ind_close"])
+    datasets: List[str] = field(default_factory=lambda: ["cm_bhav", "pr", "ind_close", "mcwb", "mcap_lists"])
     archive_base_url: str = "https://nsearchives.nseindia.com"
     max_workers: int = 4
     request_timeout_s: int = 30

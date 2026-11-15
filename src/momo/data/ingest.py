@@ -39,6 +39,10 @@ _NAME_PATTERNS: Dict[str, List[Tuple[re.Pattern, str]]] = {
     "pr": [(re.compile(r"PR(\d{6})\.zip$", re.I), "dmy")],
     "ind_close": [(re.compile(r"ind_close_all_(\d{8})", re.I), "dmY")],
     "sec_list": [(re.compile(r"sec_list_(\d{8})", re.I), "dmY")],
+    # monthly index file: the date is the last day of the month named in the file
+    "mcwb": [(re.compile(r"mcwb_([a-z]{3})(\d{2})\.zip$", re.I), "My")],
+    # exchange market-cap list: the as-on date is the eight digits in the name (ddmmyyyy)
+    "mcap_lists": [(re.compile(r"(?<!\d)(\d{8})(?!\d)"), "dmY")],
 }
 
 
@@ -57,6 +61,9 @@ def date_from_name(dataset: str, name: str) -> Optional[dt.date]:
                 return dt.datetime.strptime(m.group(1), "%d%m%y").date()
             if style == "dmY":
                 return dt.datetime.strptime(m.group(1), "%d%m%Y").date()
+            if style == "My":
+                first = dt.date(2000 + int(m.group(2)), _MONTHS[m.group(1).upper()], 1)
+                return (first.replace(day=28) + dt.timedelta(days=4)).replace(day=1) - dt.timedelta(days=1)
         except (ValueError, KeyError):
             return None
     return None
@@ -206,6 +213,28 @@ def ingest(cfg: DataConfig, force: bool = False, progress: bool = True) -> Dict[
         if frames:
             pd.concat(frames, ignore_index=True).to_parquet(out, index=False)
             state.mark(f"{dataset}:all", sig)
+
+    # ---- monthly index members; exchange market-cap lists ---------------------
+    # (few, small files: always re-read). Lists saved by hand under data/external/mcap_lists
+    # are read too, so a list the downloader does not know about can simply be dropped there.
+    periodic = [
+        ("mcwb", [cfg.raw / "mcwb"], parsers.parse_index_weights, "index_weights.parquet", ["as_of", "index_name", "symbol"]),
+        ("mcap_lists", [cfg.raw / "mcap_lists", cfg.external / "mcap_lists"], parsers.parse_mcap_list,
+         "mcap_lists.parquet", ["as_of", "symbol"]),
+    ]
+    for dataset, folders, parser, out_name, key in periodic:
+        files = sorted((d, path) for folder in folders if folder.exists() for path in folder.rglob("*")
+                       if path.is_file() and not path.name.endswith(".part") and not path.name.startswith(("~", "."))
+                       and (d := date_from_name(dataset, path.name)) is not None)
+        frames = [df.assign(source_file=path.name) for d, path in _loop(files, dataset, progress)
+                  if (df := run_parser(parser, path, d, dataset)) is not None and len(df)]
+        out = interim / out_name
+        if frames:
+            # the same list is sometimes on the server under two names: keep one copy
+            pd.concat(frames, ignore_index=True).drop_duplicates(key, keep="last").to_parquet(out, index=False)
+        elif out.exists():
+            out.unlink()
+        counts[dataset] = len(frames)
 
     # ---- static files --------------------------------------------------------
     static = cfg.raw / "static"
