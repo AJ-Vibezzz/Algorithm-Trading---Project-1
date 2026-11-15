@@ -26,14 +26,14 @@ from ..config import DataConfig
 from .corporate_actions import parse_purpose
 from .external import external_inventory
 from .ingest import read_interim
-from .panel import load_panel, load_securities
+from .panel import load_index_members, load_panel, load_securities, load_size_lists
 
 
 def data_quality_report(cfg: DataConfig, verbose: bool = True) -> Dict[str, pd.DataFrame]:
     out_dir = cfg.processed / "quality"
     out_dir.mkdir(parents=True, exist_ok=True)
     panel = load_panel(cfg, columns=["date", "sid", "symbol", "series", "close", "value", "ret_total",
-                                     "dividend", "adj_source", "shares", "lock"])
+                                     "dividend", "adj_source", "shares", "lock", "mcap_src"])
     sec = load_securities(cfg)
     stats = json.loads((cfg.processed / "panel_stats.json").read_text())
     last_day = panel["date"].max()
@@ -46,7 +46,11 @@ def data_quality_report(cfg: DataConfig, verbose: bool = True) -> Dict[str, pd.D
         "rows": g.size(),
         "companies_traded": g["sid"].nunique(),
         "median_daily_value_cr": g["value"].median() / 1e7,
-        "share_rows_with_shares_outstanding": g["shares"].apply(lambda s: s.notna().mean()).round(4),
+        # where the day's market cap came from: the exchange's daily file (from 2024), its latest
+        # market-cap list carried forward (from 2020), or nowhere (earlier years)
+        "share_rows_mcap_from_daily_file": g["mcap_src"].apply(lambda s: (s == 1).mean()).round(4),
+        "share_rows_mcap_from_lists": g["mcap_src"].apply(lambda s: (s == 2).mean()).round(4),
+        "share_rows_without_mcap": g["mcap_src"].apply(lambda s: (s == 0).mean()).round(4),
         "dividend_events": g["dividend"].apply(lambda s: int((s > 0).sum())),
         "split_bonus_rights_adjustments": g["adj_source"].apply(
             lambda s: int(s.isin(["exchange+ca_text", "exchange_only", "ca_text_only",
@@ -103,6 +107,26 @@ def data_quality_report(cfg: DataConfig, verbose: bool = True) -> Dict[str, pd.D
         gaps["download_status"] = "no manifest"
     gaps.to_csv(out_dir / "calendar_gaps.csv", index=False)
 
+    # ---- size sources: every list, and the index series as linked across renames ----------
+    lists = load_size_lists(cfg)
+    if len(lists):
+        size_sources = lists.groupby(["source", "as_of"]).agg(
+            effective=("effective", "first"), companies_ranked=("sid", "size"),
+            with_market_cap=("mcap", lambda x: int(x.notna().sum()))).reset_index()
+    else:
+        size_sources = pd.DataFrame(columns=["source", "as_of", "effective", "companies_ranked", "with_market_cap"])
+    size_sources.to_csv(out_dir / "size_lists.csv", index=False)
+    members = load_index_members(cfg)
+    indices = read_interim(cfg, "indices")
+    if len(indices):
+        index_series = indices.groupby("index_name").agg(
+            first_day=("date", "min"), last_day=("date", "max"), days=("date", "size"),
+            names_in_file=("raw_name", lambda x: " -> ".join(pd.unique(x))) if "raw_name" in indices.columns
+            else ("index_name", "first")).reset_index()
+    else:
+        index_series = pd.DataFrame(columns=["index_name", "first_day", "last_day", "days", "names_in_file"])
+    index_series.to_csv(out_dir / "index_series.csv", index=False)
+
     errors_path = cfg.interim / "_parse_errors.csv"
     n_parse_errors = len(pd.read_csv(errors_path)) if errors_path.exists() else 0
 
@@ -114,6 +138,13 @@ def data_quality_report(cfg: DataConfig, verbose: bool = True) -> Dict[str, pd.D
         "weekdays_without_data": int(len(gaps)),
         "weekdays_without_data_not_confirmed_holiday": int((gaps["download_status"] != "missing").sum()),
         "files_that_failed_to_parse": int(n_parse_errors),
+        "first_day_with_a_market_cap": str(panel.loc[panel["mcap_src"] > 0, "date"].min().date())
+        if (panel["mcap_src"] > 0).any() else None,
+        "exchange_market_cap_lists": int((size_sources["source"] == "nse_list").sum()),
+        "amfi_lists": int((size_sources["source"] == "amfi").sum()),
+        "monthly_index_member_lists": int(members["as_of"].nunique()) if len(members) else 0,
+        "index_series": int(len(index_series)),
+        "first_day_of_index_data": str(indices["date"].min().date()) if len(indices) else None,
     }
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=1, default=str))
     inventory = external_inventory(cfg)
@@ -123,7 +154,8 @@ def data_quality_report(cfg: DataConfig, verbose: bool = True) -> Dict[str, pd.D
         for k in ("first_date", "last_date", "trading_days", "companies", "companies_that_stopped_trading",
                   "unexplained_jumps_to_review", "corporate_action_texts_not_understood",
                   "weekdays_without_data_not_confirmed_holiday", "files_that_failed_to_parse",
-                  "companies_without_sector"):
+                  "companies_without_sector", "first_day_with_a_market_cap", "exchange_market_cap_lists",
+                  "amfi_lists", "monthly_index_member_lists", "first_day_of_index_data"):
             print(f"  {k:48s} {summary.get(k)}")
         missing = inventory[(~inventory["present"]) & (inventory["status"] != "optional")]
         if len(missing):
@@ -132,4 +164,5 @@ def data_quality_report(cfg: DataConfig, verbose: bool = True) -> Dict[str, pd.D
                 print(f"    - data/external/{row.file} ({row.status}): {row.if_absent}")
     return {"by_year": by_year, "exits": exits, "unexplained_jumps": jumps,
             "unrecognised_purposes": unrec, "calendar_gaps": gaps, "inventory": inventory,
+            "size_lists": size_sources, "index_series": index_series,
             "summary": pd.Series(summary, dtype=object)}
