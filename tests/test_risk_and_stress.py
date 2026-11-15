@@ -125,3 +125,15 @@ def test_liquidity_stress_gets_worse_with_haircuts(ws, cfg, net):
     assert hit["days_to_sell_90pct"] == pytest.approx(2 * base["days_to_sell_90pct"])
     assert hit["liquidation_cost_pct_nav"] > base["liquidation_cost_pct_nav"]
     assert hit["sellable_5d"] <= base["sellable_5d"]
+
+
+def test_drawdown_episodes_are_dated_correctly():
+    dates = pd.bdate_range("2024-01-01", periods=12)
+    level = pd.Series([100, 110, 99, 88, 95, 110, 121, 115, 96, 100, 90, 95], index=dates, dtype=float)
+    ep = stress.drawdown_episodes(level, min_depth=0.15)
+    assert len(ep) == 2
+    first, second = ep.iloc[0], ep.iloc[1]
+    assert (first["peak"], first["trough"], first["recovered"]) == (dates[1].date(), dates[3].date(), dates[5].date())
+    assert first["depth"] == pytest.approx(88 / 110 - 1)
+    assert second["peak"] == dates[6].date() and second["trough"] == dates[10].date() and second["recovered"] is None
+    assert len(stress.drawdown_episodes(level, min_depth=0.30)) == 0

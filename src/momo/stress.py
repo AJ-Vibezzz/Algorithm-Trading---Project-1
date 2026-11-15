@@ -13,6 +13,8 @@ Five complementary views of "what could go wrong":
                        historical episode on them: what would that crash do to
                        *this* book, and how much of it would be locked at the
                        lower circuit and unsellable?
+``drawdown_episodes``  the peak, trough and recovery dates of every large fall of
+                       an index - use it to date your stress windows from data.
 ``market_shock_table`` an instantaneous market fall applied through the
                        portfolio's beta.
 ``liquidity_stress``   how long the book takes to sell, and what it costs, when
@@ -134,6 +136,35 @@ def episode_table(episodes: pd.DataFrame, series: Dict[str, pd.Series]) -> pd.Da
     for name, r in series.items():
         out[name] = [_compound(r.loc[pd.Timestamp(s):pd.Timestamp(e)]) for s, e in zip(out["start"], out["end"])]
     return out
+
+
+def drawdown_episodes(level: pd.Series, min_depth: float = 0.10) -> pd.DataFrame:
+    """Every peak-to-trough fall of at least ``min_depth`` in a price series, with its dates.
+
+    Use it on an index (for example the small-cap index) to find the dates of
+    the stress windows you want to study, instead of taking dates on trust:
+    each row gives the peak, the trough, the depth and the recovery date.
+    """
+    s = level.dropna()
+    rows = []
+    peak_value, peak_date = s.iloc[0], s.index[0]
+    trough_value, trough_date = peak_value, peak_date
+    for date, value in s.items():
+        if value >= peak_value:  # recovered to (or above) the old peak: close the episode
+            depth = trough_value / peak_value - 1.0
+            if depth <= -min_depth:
+                rows.append({"peak": peak_date.date(), "trough": trough_date.date(), "depth": depth,
+                             "recovered": date.date(), "days_peak_to_trough": (trough_date - peak_date).days,
+                             "days_trough_to_recovery": (date - trough_date).days})
+            peak_value, peak_date, trough_value, trough_date = value, date, value, date
+        elif value < trough_value:
+            trough_value, trough_date = value, date
+    depth = trough_value / peak_value - 1.0
+    if depth <= -min_depth:  # still under water at the end of the data
+        rows.append({"peak": peak_date.date(), "trough": trough_date.date(), "depth": depth, "recovered": None,
+                     "days_peak_to_trough": (trough_date - peak_date).days, "days_trough_to_recovery": None})
+    return pd.DataFrame(rows, columns=["peak", "trough", "depth", "recovered", "days_peak_to_trough",
+                                       "days_trough_to_recovery"])
 
 
 # --------------------------------------------------------------------------- #

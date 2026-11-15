@@ -225,3 +225,46 @@ def universe_benchmark_returns(md: MarketData, uni: Universe, rows: List[int]) -
             cap_val = growth @ (wc / wc.sum())
             cap[t + 1:t_next + 1] = np.diff(np.concatenate([[1.0], cap_val])) / np.concatenate([[1.0], cap_val[:-1]])
     return pd.DataFrame({"UNIVERSE_CAP": cap, "UNIVERSE_EQUAL": eq}, index=md.dates)
+
+
+def segment_liquidity_table(md: MarketData, rank_bounds: Dict[str, List[int]], mcap_average_days: int = 126,
+                            window: int = 60) -> pd.DataFrame:
+    """How liquid is each size segment? One row per (year-end, segment).
+
+    Descriptive facts to inform the group's choice of liquidity filter, fund
+    size and participation cap: the number of stocks in each segment and the
+    spread of their typical daily traded value (in Rs crore), plus how many
+    are low-priced or outside the normal EQ series. Uses the same market-cap
+    ranking as the universe, on the last trading day of each calendar year.
+    """
+    size = rolling_mean(md.mcap_ff, mcap_average_days, min_periods=min(20, mcap_average_days))
+    med = md.median_value(window)
+    years = pd.Series(md.dates.year, index=np.arange(md.T))
+    year_ends = years.groupby(years).apply(lambda s: s.index[-1]).to_numpy()
+    rows = []
+    for t in year_ends:
+        s = np.where(md.days_since_trade[t] <= RECENT_TRADE_DAYS, size[t], np.nan)
+        if not np.isfinite(s).any():
+            continue
+        order = np.argsort(-np.nan_to_num(s, nan=-np.inf), kind="stable")
+        n = int(np.isfinite(s).sum())
+        rank = np.full(md.N, np.nan)
+        rank[order[:n]] = np.arange(1, n + 1)
+        for name, (lo, hi) in rank_bounds.items():
+            m = (rank >= lo) & (rank <= hi)
+            if not m.any():
+                continue
+            v = med[t, m] / 1e7
+            px = md.close_ff[t, m]
+            rows.append({
+                "date": md.dates[t].date(), "segment": name, "stocks": int(m.sum()),
+                "median_mcap_cr": float(np.nanmedian(md.mcap_ff[t, m]) / 1e7),
+                "traded_value_cr_p10": float(np.nanpercentile(v, 10)),
+                "traded_value_cr_p25": float(np.nanpercentile(v, 25)),
+                "traded_value_cr_median": float(np.nanmedian(v)),
+                "traded_value_cr_p75": float(np.nanpercentile(v, 75)),
+                "share_price_below_20": float(np.mean(px < 20)),
+                "share_not_in_EQ_series": float(np.mean(md.series[t, m] > 0)),
+                "share_locked_10pct_of_days": float(np.mean(md.lock_fraction(window)[t, m] > 0.10)),
+            })
+    return pd.DataFrame(rows).set_index(["date", "segment"]) if rows else pd.DataFrame()

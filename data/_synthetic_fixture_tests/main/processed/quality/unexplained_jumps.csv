@@ -1,0 +1,3 @@
+date,sid,symbol,adj_source,close_prev,prevclose,close,exchange_factor,ca_factor,dividend,ret_raw,ret_price,purposes
+2024-07-25,223,SYN0269,unexplained_jump,2332.0,2332.0,1449.95,1.0,1.0,0.0,-0.3782375643224699,-0.3782375643224699,
+2022-11-14,209,SYN0253,unexplained_jump,1212.2,1212.2,885.3,1.0,1.0,0.0,-0.2696749711268768,-0.2696749711268768,

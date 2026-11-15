@@ -1,0 +1,6 @@
+year,trading_days,rows,companies_traded,median_daily_value_cr,share_rows_with_shares_outstanding,dividend_events,split_bonus_rights_adjustments,rows_locked_upper_band,rows_locked_lower_band,rows_not_in_EQ_series,avg_rows_per_day,new_listings,exits
+2021,248,66201,282,7.446098340000001,1.0,250,11,245,221,204,267.0,282,0
+2022,248,70021,298,5.598838195,1.0,277,18,303,331,228,282.0,16,7
+2023,248,71506,308,5.47787694,1.0,301,21,365,320,343,288.0,17,12
+2024,250,72897,301,5.9813928,1.0,298,21,319,326,473,292.0,5,11
+2025,123,34947,290,6.1095568280000006,1.0,112,14,151,130,202,284.0,0,4

@@ -31,7 +31,7 @@ import pandas as pd  # noqa: E402
 from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm  # noqa: E402
 from matplotlib.patches import PathPatch, Rectangle  # noqa: E402
 from matplotlib.path import Path as MplPath  # noqa: E402
-from matplotlib.ticker import FuncFormatter, MaxNLocator  # noqa: E402
+from matplotlib.ticker import Formatter, FuncFormatter, MaxNLocator  # noqa: E402
 
 SURFACE = "#fcfcfb"
 INK, INK_2, MUTED = "#0b0b0b", "#52514e", "#898781"
@@ -55,8 +55,18 @@ plt.rcParams.update({
     "lines.solid_capstyle": "round", "lines.solid_joinstyle": "round",
 })
 
-_pct = FuncFormatter(lambda v, _: f"{v:.0%}")
-_pct1 = FuncFormatter(lambda v, _: f"{v:.1%}")
+class _Pct(Formatter):
+    """Percent tick labels: one style per axis, with as many decimals as the tick values need."""
+
+    def format_ticks(self, values):
+        pct = np.asarray(values, float) * 100.0
+        decimals = next((d for d in (0, 1, 2) if np.allclose(pct, np.round(pct, d), atol=1e-7)), 2)
+        return [f"{v:.{decimals}f}%" for v in pct]
+
+    def __call__(self, x, pos=None):
+        return f"{x * 100:g}%"
+
+
 _LOG_TICKS = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 5, 6, 8, 10,
               15, 20, 30, 50, 75, 100]
 _PRETTY = {"UNIVERSE_CAP": "Universe, cap-weighted", "UNIVERSE_EQUAL": "Universe, equal-weighted"}
@@ -66,12 +76,6 @@ def pretty(name: str) -> str:
     """Display name of a benchmark series."""
     key = str(name).strip().upper()
     return _PRETTY.get(key, str(name).title().replace(" Tri", " TRI"))
-
-
-def _pct_axis(axis, lo: float, hi: float) -> None:
-    """Percent tick labels with as many decimals as the range needs."""
-    span = abs(hi - lo)
-    axis.set_major_formatter(_pct if span >= 0.08 else _pct1 if span >= 0.008 else FuncFormatter(lambda v, _: f"{v:.2%}"))
 
 
 # --------------------------------------------------------------------------- #
@@ -234,7 +238,7 @@ def equity_and_drawdown(nav: pd.Series, benchmarks: pd.DataFrame, title: str = "
     _titles(ax, title, "Log scale; each series starts at 1. End values at right. Benchmarks are gross of costs.")
     _end_labels(ax, ends)
     ax.grid(axis="x", visible=False)
-    ax2.yaxis.set_major_formatter(_pct)
+    ax2.yaxis.set_major_formatter(_Pct())
     ax2.set_title("Drawdown from running peak", loc="left", color=INK_2, fontsize=9, pad=4)
     _time_axis(ax2)
     handles, labels = ax.get_legend_handles_labels()
@@ -250,7 +254,7 @@ def rolling_return(returns: pd.Series, bench: pd.Series, window: int = 252, benc
     ax.plot(rs.index, rs.to_numpy(), color=SERIES[0], label="Strategy (net)", lw=2.0, zorder=3)
     ax.plot(rb.index, rb.to_numpy(), color=SERIES[1], label=pretty(bench_label), lw=1.3)
     ax.axhline(0, color=AXIS, lw=0.8)
-    ax.yaxis.set_major_formatter(_pct)
+    ax.yaxis.set_major_formatter(_Pct())
     _titles(ax, f"Rolling {window}-day return")
     _time_axis(ax)
     _legend(ax)
@@ -300,7 +304,7 @@ def calendar_years(table: pd.DataFrame, bench_col: str):
     ax.set_xticks(x)
     ax.set_xticklabels(table.index)
     ax.set_xlim(-0.6, max(len(table), 4) - 0.4)
-    ax.yaxis.set_major_formatter(_pct)
+    ax.yaxis.set_major_formatter(_Pct())
     ax.grid(axis="x", visible=False)
     _titles(ax, "Return by calendar year", "First and last years may be partial.")
     _legend(ax)
@@ -348,7 +352,7 @@ def regimes(table: pd.DataFrame, bench_label: str = "Benchmark"):
     ax.set_yticklabels(t.index)
     ax.set_ylim(-0.6, n - 0.4)
     ax.axvline(0, color=AXIS, lw=0.8)
-    ax.xaxis.set_major_formatter(_pct)
+    ax.xaxis.set_major_formatter(_Pct())
     ax.grid(axis="y", visible=False)
     ax.tick_params(axis="y", length=0)
     _titles(ax, "Annualised return by market regime", "Regimes classified from benchmark data up to the previous day.")
@@ -404,7 +408,7 @@ def exposure(daily: pd.DataFrame):
     fig, (ax, ax2) = _fig(2, height=4.2, ratios=[1, 1], sharex=True)
     ax.plot(daily.index, daily["exposure"], color=SERIES[0])
     ax.fill_between(daily.index, daily["exposure"], 0.0, color=SERIES[0], alpha=0.10, lw=0)
-    ax.yaxis.set_major_formatter(_pct)
+    ax.yaxis.set_major_formatter(_Pct())
     ax.set_ylim(0, max(1.05, float(daily["exposure"].max()) * 1.05))
     _titles(ax, "Invested fraction of NAV")
     ax.grid(axis="x", visible=False)
@@ -424,7 +428,7 @@ def sector_weights(avg: pd.Series, peak: pd.Series, cap: float):
     ax.scatter(peak[order], pos, marker="|", s=170, color=INK, lw=1.6, zorder=3)
     ax.axvline(cap, color=CRITICAL, lw=1.0)
     ax.text(cap, ax.get_ylim()[1], f" limit {cap:.0%}", color=INK_2, fontsize=8, va="top", ha="left")
-    ax.xaxis.set_major_formatter(_pct)
+    ax.xaxis.set_major_formatter(_Pct())
     ax.set_xlim(0, max(cap * 1.25, float(peak.max()) * 1.08))
     _titles(ax, "Sector weights: average and peak", "Bar = average over the period; black tick = highest daily weight")
     _round_bar_ends(ax)
@@ -443,7 +447,7 @@ def var_backtest(series: pd.DataFrame, limit: float, confidence: float):
     ax.axhline(-limit, color=INK_2, lw=0.9)
     ax.text(s.index[-1], -limit, f"VaR limit {limit:.1%} ", va="bottom", ha="right", color=INK_2, fontsize=8)
     ax.axhline(0, color=AXIS, lw=0.8)
-    ax.yaxis.set_major_formatter(_pct1)
+    ax.yaxis.set_major_formatter(_Pct())
     _titles(ax, "VaR back-test", "A breach is a next-day loss larger than that day's VaR")
     _time_axis(ax)
     _legend(ax)
@@ -468,7 +472,7 @@ def stress_windows(table: pd.DataFrame, bench_col: str):
     ax.set_ylim(-0.6, slots - 0.4)
     ax.axvline(0, color=AXIS, lw=0.8)
     ax.margins(x=0.2)
-    _pct_axis(ax.xaxis, *ax.get_xlim())
+    ax.xaxis.set_major_formatter(_Pct())
     ax.grid(axis="y", visible=False)
     ax.tick_params(axis="y", length=0)
     _titles(ax, "Stress windows: return over each episode")
@@ -483,10 +487,10 @@ def capacity(table: pd.DataFrame):
     x = table.index.to_numpy(float)
     ax.plot(x, table["net_cagr"], color=SERIES[0], marker="o", ms=5.5, mec=SURFACE, mew=1.4)
     ax.axhline(0, color=AXIS, lw=0.8)
-    ax.yaxis.set_major_formatter(_pct)
+    ax.yaxis.set_major_formatter(_Pct())
     _titles(ax, "Capacity: net annual return by fund size")
     ax2.plot(x, table["value_fill_ratio"], color=SERIES[0], marker="o", ms=5.5, mec=SURFACE, mew=1.4)
-    ax2.yaxis.set_major_formatter(_pct)
+    ax2.yaxis.set_major_formatter(_Pct())
     ax2.set_ylim(0, 1.05)
     ax2.set_title("Share of ordered value that was filled", loc="left", color=INK, fontweight="bold", fontsize=11)
     ax2.set_xscale("log")
@@ -510,7 +514,7 @@ def liquidity_profile(profile: Dict[str, float], limit: Optional[float] = None, 
         ax.text(i, profile[k], f"{profile[k]:.0%}", ha="center", va="bottom", color=INK_2, fontsize=8)
     ax.set_xticks(np.arange(len(keys)))
     ax.set_xticklabels([f"{d} day{'s' if d != '1' else ''}" for d in days])
-    ax.yaxis.set_major_formatter(_pct)
+    ax.yaxis.set_major_formatter(_Pct())
     ax.set_ylim(0, 1.15)
     ax.grid(axis="x", visible=False)
     if limit is not None:
@@ -534,7 +538,7 @@ def attribution_bars(attr: pd.DataFrame, title: str = "Contribution to return by
     _hbars(ax, [str(i) for i in a.index], a["contribution_net"],
            [POS if v >= 0 else NEG for v in a["contribution_net"]], slots=4)
     ax.axvline(0, color=AXIS, lw=0.8)
-    _pct_axis(ax.xaxis, *ax.get_xlim())
+    ax.xaxis.set_major_formatter(_Pct())
     _titles(ax, title, "Net of costs; sum of daily P&L over previous-day NAV. Blue = gain, red = loss.")
     _round_bar_ends(ax)
     return fig
@@ -591,8 +595,9 @@ def sensitivity_heatmap(pivot: pd.DataFrame, metric: str, row_label: str, col_la
     ax.set_xticklabels(pivot.columns)
     ax.set_yticks(range(pivot.shape[0]))
     ax.set_yticklabels(pivot.index)
-    ax.set_xlabel(col_label)
-    ax.set_ylabel(row_label)
+    short = lambda path: str(path).split(".")[-1].replace("_", " ")  # noqa: E731  config path -> readable label
+    ax.set_xlabel(short(col_label))
+    ax.set_ylabel(short(row_label))
     ax.grid(False)
     ax.tick_params(length=0)
     ax.set_xticks(np.arange(-0.5, pivot.shape[1], 1), minor=True)
@@ -601,5 +606,6 @@ def sensitivity_heatmap(pivot: pd.DataFrame, metric: str, row_label: str, col_la
     ax.tick_params(which="minor", length=0)
     for side in ("left", "bottom"):
         ax.spines[side].set_visible(False)
-    _titles(ax, f"Training-period {metric.replace('_', ' ')} by parameter pair")
+    name = metric.replace("_", " ")
+    _titles(ax, f"Training period: {name[0].upper() + name[1:]} by parameter pair", "Darker = larger")
     return fig

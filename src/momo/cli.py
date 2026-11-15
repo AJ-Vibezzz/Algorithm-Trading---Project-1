@@ -11,6 +11,8 @@ The commands follow the order of the project::
     freeze     lock the chosen parameters                     -> config/frozen_strategy.yaml
     test       back-test the untouched TEST period            -> results/test
     full       training + test in one run (stress windows)    -> results/full
+    liquidity  how liquid each size segment is, year by year (to choose filters and fund size)
+    episodes   list the large falls of an index, with dates (to choose stress windows)
 
 Every command prints what it wrote. None of them writes commentary: the
 interpretation of the exhibits is the group's work.
@@ -235,6 +237,44 @@ def cmd_freeze(args) -> None:
     print(f"\nRun the test period with:  python run.py test --strategy {args.frozen}")
 
 
+def cmd_liquidity(args) -> None:
+    from .config import UniverseCfg
+    from .universe import segment_liquidity_table
+
+    ws = _workspace(args)
+    bounds = UniverseCfg().rank_bounds
+    try:  # use the group's own segment definitions if a config exists
+        bounds = StrategyConfig.load(args.strategy).universe.rank_bounds
+    except ConfigError:
+        pass
+    _banner("Liquidity of each size segment at each year-end (typical daily traded value, Rs crore)")
+    table = segment_liquidity_table(ws.md, bounds)
+    with pd.option_context("display.width", 220, "display.float_format", "{:,.2f}".format):
+        print(table.to_string())
+    out = Path(args.out) / "segment_liquidity.csv"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    table.to_csv(out)
+    print(f"\nSaved {out}. Facts for choosing your liquidity filter, fund size and participation cap - the choice is yours.")
+
+
+def cmd_episodes(args) -> None:
+    from .stress import drawdown_episodes
+
+    ws = _workspace(args)
+    md = ws.md
+    if not args.index:
+        _banner("Index series available in your data")
+        print("\n".join(f"  {name}" for name in sorted(md.indices.columns)))
+        print("\nRun again with --index \"NAME\" to list that index's drawdown episodes.")
+        return
+    level = pd.Series(md.index_level(args.index), index=md.dates)
+    _banner(f"Falls of at least {args.min_depth:.0%} in {args.index.upper()} "
+            f"({level.dropna().index[0].date()} to {level.dropna().index[-1].date()})")
+    table = drawdown_episodes(level, args.min_depth)
+    print(table.to_string(index=False) if len(table) else "none")
+    print("\nThese are facts about the index. Which episodes to use as stress windows, and why, is your call.")
+
+
 # --------------------------------------------------------------------------- #
 # Parser
 # --------------------------------------------------------------------------- #
@@ -281,6 +321,16 @@ def build_parser() -> argparse.ArgumentParser:
         sp = sub.add_parser(name, help=text)
         common(sp)
         sp.set_defaults(func=func)
+
+    sp = sub.add_parser("liquidity", help="how liquid each size segment is, year by year (to choose filters)")
+    common(sp)
+    sp.set_defaults(func=cmd_liquidity)
+
+    sp = sub.add_parser("episodes", help="date the large falls of an index (to choose stress windows)")
+    common(sp, strategy=False)
+    sp.add_argument("--index", help="index name; omit to list the names available")
+    sp.add_argument("--min-depth", type=float, default=0.15, help="smallest fall to list (0.15 = 15%%)")
+    sp.set_defaults(func=cmd_episodes)
 
     sp = sub.add_parser("search", help="parameter search on the training period (every run is logged)")
     common(sp)
