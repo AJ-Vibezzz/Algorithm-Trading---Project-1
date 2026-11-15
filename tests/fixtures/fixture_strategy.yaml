@@ -1,0 +1,60 @@
+# Strategy settings used ONLY by the automated tests, on the synthetic fixture.
+# The numbers are sized for a 320-company made-up market and mean nothing for
+# real data. This file is not a strategy recommendation.
+meta:
+  strategy_name: "test-fixture"
+  authors: ["automated tests"]
+sample:
+  train_start: 2022-03-01
+  train_end: 2023-12-29
+  test_start: 2024-01-01
+  test_end: 2025-06-30
+capital:
+  initial_capital_inr: 250000000
+  cash_return: rf
+benchmark:
+  primary: "NIFTY SMALLCAP 250"
+  others: ["UNIVERSE_EQUAL", "UNIVERSE_CAP"]
+universe:
+  source: mcap_rank
+  segments: [mid, small]
+  rank_bounds: {large: [1, 30], mid: [31, 90], small: [91, 180], micro: [181, 260]}
+  mcap_average_days: 126
+  min_listing_days: 252
+  min_price_inr: 10
+  min_median_traded_value_inr: 5000000
+  liquidity_lookback_days: 60
+  min_traded_days_fraction: 0.9
+signal:
+  components:
+    - {kind: return, lookback_months: 12, skip_months: 1, weight: 1.0}
+portfolio:
+  selection: top_n
+  n_holdings: 20
+  exit_rank_multiple: 1.5
+  weighting: equal
+  max_weight_per_stock: 0.08
+  max_weight_per_sector: 0.30
+  holding_months: 1
+  rebalance: monthly
+  cash_buffer: 0.02
+execution:
+  price: vwap
+  participation_cap: 0.10
+  max_execution_days: 5
+costs:
+  brokerage_bps_per_side: 10
+  spread_model: corwin_schultz
+  impact_coefficient: 0.5
+risk:
+  var: {confidence: 0.99, limit_pct_nav: 0.04, action: scale}
+  es: {confidence: 0.975, limit_pct_nav: 0.05}
+  drawdown: {soft_limit: 0.15, soft_exposure: 0.5, hard_limit: 0.25, hard_exposure: 0.0, cooloff_days: 21}
+  delisting_return: -0.3
+  max_stale_days: 20
+stress:
+  windows:
+    - {name: "fixture crash", start: 2022-02-21, end: 2022-04-29}
+  market_shocks: [-0.10, -0.20]
+  adv_haircuts: [0.5]
+  spread_multipliers: [3]
