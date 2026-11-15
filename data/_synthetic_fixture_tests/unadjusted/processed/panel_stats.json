@@ -1,0 +1,28 @@
+{
+ "data_kind": "synthetic",
+ "raw_price_rows": 39106,
+ "non_equity_companies_dropped": 3,
+ "rows_with_blank_isin": 0,
+ "non_equity_row_share": 0.0351,
+ "duplicate_rows_dropped": 0,
+ "share_of_rows_with_published_shares": 1.0,
+ "corporate_action_events": 170,
+ "corporate_action_lines_not_understood": 0,
+ "return_overrides_applied": 0,
+ "band_hit_file_days": 236,
+ "locked_up_rows": 170,
+ "locked_down_rows": 153,
+ "adjustments_by_source": {
+  "ca_text_only": 20,
+  "demerger_neutralised": 1
+ },
+ "dividend_events_used": 149,
+ "first_date": "2023-03-01",
+ "last_date": "2024-12-31",
+ "trading_days": 458,
+ "panel_rows": 37732,
+ "companies": 90,
+ "companies_with_renames": 3,
+ "companies_with_isin_changes": 6,
+ "companies_without_sector": 0
+}

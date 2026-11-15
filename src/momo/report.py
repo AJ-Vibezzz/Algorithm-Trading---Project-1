@@ -39,6 +39,13 @@ SYNTHETIC_NOTE = (
 )
 
 
+EXAMPLE_NOTE = (
+    "These files were produced with a shipped EXAMPLE configuration, not with a\n"
+    "strategy designed by the project group. Use them to check that the code runs\n"
+    "on your data. Do not report them as your strategy's results.\n"
+)
+
+
 def _git_commit() -> str:
     try:
         return subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True,
@@ -61,7 +68,7 @@ def _segments(ws: Workspace, cfg: StrategyConfig, result: BacktestResult) -> Dic
 
 def build_report_pack(ws: Workspace, cfg: StrategyConfig, variants: Dict[str, BacktestResult],
                       out_dir: str | Path, label: str = "", capacity: Optional[pd.DataFrame] = None,
-                      verbose: bool = True) -> Dict[str, object]:
+                      registry=None, verbose: bool = True) -> Dict[str, object]:
     """Compute and save every exhibit for ``variants`` (must contain "net")."""
     md = ws.md
     net = variants["net"]
@@ -72,6 +79,8 @@ def build_report_pack(ws: Workspace, cfg: StrategyConfig, variants: Dict[str, Ba
     kind = md.data_kind
     if kind == "synthetic":
         (out_dir / "SYNTHETIC_NOT_A_RESULT.txt").write_text(SYNTHETIC_NOTE)
+    if cfg.meta.is_example:
+        (out_dir / "EXAMPLE_CONFIG_NOT_YOUR_STRATEGY.txt").write_text(EXAMPLE_NOTE)
     pack: Dict[str, object] = {}
 
     def table(name: str, df) -> None:
@@ -80,7 +89,7 @@ def build_report_pack(ws: Workspace, cfg: StrategyConfig, variants: Dict[str, Ba
         pack[name] = frame
 
     def figure(name: str, fig) -> None:
-        plots.save(fig, fdir / f"{name}.png", kind)
+        plots.save(fig, fdir / f"{name}.png", kind, cfg.meta.is_example)
 
     rf = pd.Series(md.rf_daily, index=md.dates)
     bench = benchmark_returns(ws, cfg, net)
@@ -222,10 +231,24 @@ def build_report_pack(ws: Workspace, cfg: StrategyConfig, variants: Dict[str, Ba
         table("20_capacity", capacity)
         figure("17_capacity", plots.capacity(capacity))
 
+    # ---- 9. is the Sharpe ratio distinguishable from luck, given how many settings were tried? ------------
+    from .research import deflated_sharpe
+
+    excess = (r - rf.reindex(r.index).fillna(0.0)).iloc[1:]
+    n_trials, trial_sharpes = 1, None
+    if registry is not None:
+        trials = registry.trials()
+        if len(trials):
+            trials = trials[trials["data_kind"] == kind] if "data_kind" in trials.columns else trials
+            n_trials = max(1, int(trials["fingerprint"].nunique()))
+            trial_sharpes = trials.drop_duplicates("fingerprint")["sharpe_daily"].to_numpy(float)
+    table("21_sharpe_significance", pd.Series(deflated_sharpe(excess, n_trials, trial_sharpes), name="value"))
+
     manifest = {
         "label": label, "written_at": dt.datetime.now().isoformat(timespec="seconds"),
         "data_kind": kind, "period": [str(net.daily.index[0].date()), str(last_day.date())],
         "config_fingerprint": cfg.fingerprint(), "config": cfg.to_dict(),
+        "is_example_config": bool(cfg.meta.is_example),
         "data": {"first_day": str(md.dates[0].date()), "last_day": str(md.dates[-1].date()),
                  "trading_days": md.T, "companies": md.N, "risk_free_supplied": not md.rf_missing,
                  "factor_source": factors.attrs.get("source", ""), "hml_source": factors.attrs.get("hml_source", "none")},
@@ -238,5 +261,6 @@ def build_report_pack(ws: Workspace, cfg: StrategyConfig, variants: Dict[str, Ba
     if verbose:
         n_t, n_f = len(list(tdir.glob("*.csv"))), len(list(fdir.glob("*.png")))
         print(f"Report pack written to {out_dir}: {n_t} tables, {n_f} figures"
-              + ("   *** SYNTHETIC FIXTURE - NOT RESULTS ***" if kind == "synthetic" else ""))
+              + ("   *** SYNTHETIC FIXTURE - NOT RESULTS ***" if kind == "synthetic" else "")
+              + ("   *** EXAMPLE CONFIG - NOT YOUR STRATEGY ***" if cfg.meta.is_example else ""))
     return pack

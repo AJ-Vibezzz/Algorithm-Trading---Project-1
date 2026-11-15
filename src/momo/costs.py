@@ -95,7 +95,8 @@ class StatutorySchedule:
         out = []
         for section, entries in self.raw.items():
             for e in (entries if isinstance(entries, list) else [entries]):
-                if str(e.get("checked", "no")).lower() == "no":
+                # YAML reads a bare `no` as False, so accept both spellings
+                if e.get("checked", False) is False or str(e.get("checked")).lower() in ("no", "false"):
                     out.append(f"{section} (from {e.get('from', e.get('date'))})")
         return out
 

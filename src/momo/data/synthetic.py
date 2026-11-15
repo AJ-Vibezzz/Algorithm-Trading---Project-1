@@ -193,6 +193,11 @@ def generate_fixture(root: Path, spec: Optional[FixtureSpec] = None) -> FixtureT
             return
         events.setdefault(t, []).append({"i": int(i), "kind": kind, **kw})
 
+    def mid_sample_day() -> int:
+        """A random day away from both ends of the sample (also valid for very short samples)."""
+        lo = min(60, T // 3)
+        return int(rng.integers(lo, max(T - 20, lo + 1)))
+
     for i in range(N):
         for year_start in range(0, T, 250):  # dividends: up to two a year for most companies
             if rng.random() < 0.75:
@@ -203,15 +208,15 @@ def generate_fixture(root: Path, spec: Optional[FixtureSpec] = None) -> FixtureT
                           as_pct=False)
         if rng.random() < 0.16:
             a, b = [(1, 1), (1, 2), (2, 1), (3, 2), (1, 5)][rng.integers(0, 5)]
-            add_event(i, rng.integers(60, T - 20), "bonus", a=a, b=b)
+            add_event(i, mid_sample_day(), "bonus", a=a, b=b)
         if rng.random() < 0.14 and fv[i] >= 2:
             new = {10.0: [5.0, 2.0, 1.0], 5.0: [1.0], 2.0: [1.0]}[fv[i]]
-            add_event(i, rng.integers(60, T - 20), "split", new_fv=float(rng.choice(new)))
+            add_event(i, mid_sample_day(), "split", new_fv=float(rng.choice(new)))
         if rng.random() < 0.04:
-            add_event(i, rng.integers(60, T - 20), "rights", a=1, b=int(rng.choice([3, 4, 5])),
+            add_event(i, mid_sample_day(), "rights", a=1, b=int(rng.choice([3, 4, 5])),
                       discount=rng.uniform(0.25, 0.5))
         if rng.random() < 0.015:
-            add_event(i, rng.integers(60, T - 20), "demerger", spin=rng.uniform(0.2, 0.35))
+            add_event(i, mid_sample_day(), "demerger", spin=rng.uniform(0.2, 0.35))
     for t in list(events):  # one structural event per company per day keeps the truth simple
         seen = set()
         events[t] = [e for e in events[t] if not (e["i"] in seen or seen.add(e["i"]))]
@@ -432,7 +437,9 @@ def generate_fixture(root: Path, spec: Optional[FixtureSpec] = None) -> FixtureT
     static_dir.mkdir(parents=True, exist_ok=True)
     sc = pd.DataFrame(symbol_change_rows, columns=["name", "old", "new", "date"])
     sc["date"] = [f"{x:%d-%b-%Y}".upper() for x in sc["date"]]
-    sc.to_csv(static_dir / "symbolchange.csv", index=False, header=False)
+    # the real file starts with a header row; the parser recognises and skips it
+    sc.to_csv(static_dir / "symbolchange.csv", index=False,
+              header=["SYMB_COMPANY_NAME", " SM_KEY_SYMBOL", " SM_NEW_SYMBOL", " SM_APPLICABLE_FROM"])
 
     ext = root / "external"
     ext.mkdir(exist_ok=True)

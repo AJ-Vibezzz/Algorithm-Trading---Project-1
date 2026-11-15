@@ -1,0 +1,28 @@
+{
+ "data_kind": "synthetic",
+ "raw_price_rows": 318923,
+ "non_equity_companies_dropped": 3,
+ "rows_with_blank_isin": 0,
+ "non_equity_row_share": 0.0105,
+ "duplicate_rows_dropped": 0,
+ "share_of_rows_with_published_shares": 1.0,
+ "corporate_action_events": 1323,
+ "corporate_action_lines_not_understood": 0,
+ "return_overrides_applied": 0,
+ "band_hit_file_days": 926,
+ "locked_up_rows": 1383,
+ "locked_down_rows": 1328,
+ "adjustments_by_source": {
+  "exchange+ca_text": 85,
+  "unexplained_jump": 2
+ },
+ "dividend_events_used": 1238,
+ "first_date": "2021-01-04",
+ "last_date": "2025-06-30",
+ "trading_days": 1117,
+ "panel_rows": 315572,
+ "companies": 320,
+ "companies_with_renames": 10,
+ "companies_with_isin_changes": 26,
+ "companies_without_sector": 0
+}

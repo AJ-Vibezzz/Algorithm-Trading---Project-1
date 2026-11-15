@@ -178,18 +178,26 @@ def _hbars(ax, labels: Sequence[str], values: Sequence[float], colours, height: 
     return pos
 
 
-def stamp(fig, data_kind: str) -> None:
-    """Mark charts made from the synthetic fixture so they can never pass as results."""
-    if data_kind != "synthetic":
+def stamp(fig, data_kind: str, example: bool = False) -> None:
+    """Mark charts that must never be presented as the group's results.
+
+    Two cases: charts made from the synthetic test fixture, and charts made
+    with a shipped example configuration (not the group's own design).
+    """
+    if data_kind == "synthetic":
+        text = "SYNTHETIC TEST DATA\nNOT A BACK-TEST RESULT"
+    elif example:
+        text = "EXAMPLE CONFIGURATION\nNOT THE GROUP'S STRATEGY"
+    else:
         return
-    fig.text(0.5, 0.5, "SYNTHETIC TEST DATA\nNOT A BACK-TEST RESULT", ha="center", va="center", rotation=24,
-             fontsize=26, color=MUTED, alpha=0.22, fontweight="bold", zorder=100)
+    fig.text(0.5, 0.5, text, ha="center", va="center", rotation=24, fontsize=26, color=MUTED, alpha=0.22,
+             fontweight="bold", zorder=100)
 
 
-def save(fig, path: str | Path, data_kind: str = "real", dpi: int = 200) -> Path:
+def save(fig, path: str | Path, data_kind: str = "real", example: bool = False, dpi: int = 200) -> Path:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    stamp(fig, data_kind)
+    stamp(fig, data_kind, example)
     fig.savefig(path, dpi=dpi, bbox_inches="tight", pad_inches=0.15)
     plt.close(fig)
     return path

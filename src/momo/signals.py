@@ -34,6 +34,7 @@ Which blocks to use, with what look-back and skip, is the group's decision.
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass, field
 from typing import Dict, Optional
 
@@ -109,7 +110,8 @@ def _residual_momentum(md: MarketData, t: int, i0: int, i1: int, est_days: int, 
     xb = np.where(ok, x[:, None], 0.0)
     sx, sy = xb.sum(axis=0), y0.sum(axis=0)
     sxx, sxy = (xb * xb).sum(axis=0), (xb * y0).sum(axis=0)
-    with np.errstate(invalid="ignore", divide="ignore"):
+    with np.errstate(invalid="ignore", divide="ignore"), warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)  # stocks with no data in the window give NaN, by design
         beta = (sxy - sx * sy / n) / (sxx - sx * sx / n)
         alpha = (sy - beta * sx) / n
         resid = np.where(ok, y - alpha - beta * x[:, None], np.nan)

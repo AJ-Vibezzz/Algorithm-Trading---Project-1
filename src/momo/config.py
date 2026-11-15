@@ -133,6 +133,9 @@ class MetaCfg:
     strategy_name: Optional[str] = _req()
     authors: List[str] = field(default_factory=list)
     design_note: Optional[str] = None
+    # True only for the shipped example configs. Outputs made with it are stamped
+    # "EXAMPLE CONFIGURATION" so they cannot be mistaken for the group's own strategy.
+    is_example: bool = False
 
 
 @dataclass

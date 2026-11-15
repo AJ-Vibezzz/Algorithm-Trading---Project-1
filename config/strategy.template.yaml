@@ -1,0 +1,220 @@
+# =============================================================================
+# STRATEGY CONFIGURATION - TEMPLATE                      >>> GROUP-OWNED <<<
+# =============================================================================
+# HOW TO USE
+#   1. Copy this file to  config/strategy.yaml
+#   2. Replace every `null` marked TODO with YOUR decision.
+#   3. Record the reason for each decision in docs/03_design_decisions.md
+#      (the evidence for each option is summarised there, with references).
+#   4. Run:  python run.py check     -> lists anything still undecided.
+#
+# WHY THE VALUES ARE BLANK
+#   The course rules say each group must design its own strategy and
+#   parameters, and that AI-generated analysis or recommendations may not be
+#   submitted as your own. So the code implements the *options*; the *choices*
+#   are yours. The pipeline refuses to run a back-test while a required field
+#   is still null.
+#
+# Fields that already have a value are either conventions with a cited source,
+# or technical settings; you may change them, but you do not have to.
+# =============================================================================
+
+meta:
+  strategy_name: null            # TODO a short name for your strategy
+  authors: []                    # TODO both group members
+  design_note: null              # optional: one sentence on the idea
+  is_example: false              # leave false - true is only for the shipped example config
+
+# -----------------------------------------------------------------------------
+# 1. SAMPLE: training period (choose parameters here) and test period (untouched)
+# -----------------------------------------------------------------------------
+sample:
+  train_start: null              # TODO YYYY-MM-DD  (data must start a full look-back earlier)
+  train_end: null                # TODO
+  test_start: null               # TODO must be after train_end
+  test_end: null                 # TODO
+
+capital:
+  initial_capital_inr: null      # TODO fund size in rupees - drives liquidity caps, impact and capacity
+  cash_return: rf                # rf = idle cash earns the T-bill rate | zero
+
+benchmark:
+  primary: null                  # TODO an index name as it appears in the NSE index file
+                                 #      (e.g. "NIFTY SMALLCAP 250"), a supplied total-return series
+                                 #      ("... TRI"), or UNIVERSE_CAP / UNIVERSE_EQUAL
+  others: []                     # optional further benchmarks (at most two are drawn on the main chart)
+
+# -----------------------------------------------------------------------------
+# 2. UNIVERSE: which stocks may be bought, as known on each rebalance date
+# -----------------------------------------------------------------------------
+universe:
+  source: null                   # TODO mcap_rank | index_constituents
+  segments: null                 # TODO subset of [mid, small, micro]   e.g. [small, micro]
+  # Rank conventions - SEBI/AMFI: large 1-100, mid 101-250, small 251 onwards;
+  # NSE Indices: Smallcap 250 = ranks 251-500, Microcap 250 = ranks 501-750.
+  rank_bounds:
+    large: [1, 100]
+    mid: [101, 250]
+    small: [251, 500]
+    micro: [501, 750]
+  mcap_average_days: 126         # six-month average market cap, as in the index reviews
+  index_names: []                # only for source: index_constituents
+  allowed_series: [EQ]           # EQ only: BE/BZ (trade-for-trade, a surveillance outcome) are excluded
+  min_listing_days: null         # TODO minimum trading days since listing
+  min_price_inr: null            # TODO minimum share price (penny-stock screen)
+  min_median_traded_value_inr: null   # TODO minimum liquidity: median daily traded value, in rupees
+  liquidity_lookback_days: null  # TODO window for the two liquidity tests
+  min_traded_days_fraction: null # TODO share of days the stock must have traded (0-1)
+  max_circuit_days_fraction: null     # optional: drop stocks pinned at a price band too often; null = off
+  circuit_lookback_days: 60
+  exclude_surveillance: true     # uses data/external/surveillance.csv (ASM/GSM history) if you supply it
+
+# -----------------------------------------------------------------------------
+# 3. SIGNAL: how momentum is measured
+# -----------------------------------------------------------------------------
+signal:
+  # One or more components; the score is the weighted average of their z-scores.
+  #   kind: return                 cumulative total return over the window
+  #         risk_adjusted_return   that return divided by annualised volatility
+  #         residual               market-residual momentum
+  #         high_52w               nearness to the highest price in the window
+  components:
+    - kind: null                 # TODO
+      lookback_months: null      # TODO formation period J
+      skip_months: null          # TODO most recent months skipped (short-term reversal)
+      weight: 1.0
+      residual_estimation_months: 36   # only used by kind: residual
+  winsorize_pct: 0.01            # clip each component at the 1st / 99th percentile before z-scoring
+  min_history_fraction: 0.8      # stock must have traded on this share of days in the window
+  days_per_month: 21
+  volatility_lookback_days: 252
+  filters:
+    require_positive_momentum: false   # optional absolute-momentum screen
+    max_volatility_percentile: null    # optional: e.g. 0.9 drops the most volatile 10%
+    max_information_discreteness: null # optional "frog in the pan" screen; null = off
+
+# -----------------------------------------------------------------------------
+# 4. PORTFOLIO CONSTRUCTION
+# -----------------------------------------------------------------------------
+portfolio:
+  selection: null                # TODO top_n | top_fraction
+  n_holdings: null               # TODO if top_n: number of stocks
+  top_fraction: null             # TODO if top_fraction: e.g. 0.1 = top decile
+  exit_rank_multiple: null       # TODO buffer: 1.0 = sell as soon as a stock leaves the top N;
+                                 #      2.0 = hold until it falls below rank 2N
+  weighting: null                # TODO equal | inverse_vol | score | min_variance
+  weighting_lookback_days: 126
+  max_weight_per_stock: null     # TODO e.g. 0.05 = 5% of the portfolio
+  max_weight_per_sector: null    # TODO
+  holding_months: null           # TODO K: 1 = replace the whole book each rebalance;
+                                 #      K>1 = K overlapping tranches (Jegadeesh-Titman style)
+  rebalance: null                # TODO monthly | quarterly | weekly
+  gross_exposure: 1.0            # long-only, no leverage
+  cash_buffer: null              # TODO share of NAV kept in cash (0-1)
+  no_trade_band: 0.0             # leave a continuing position alone if its weight is within this of target
+
+# -----------------------------------------------------------------------------
+# 5. EXECUTION AND LIQUIDITY LIMITS   (decide on day t, trade from day t+1)
+# -----------------------------------------------------------------------------
+execution:
+  price: null                    # TODO vwap | open | close  (of the trading day)
+  participation_cap: null        # TODO max share of average daily traded value per day (brief suggests 0.10)
+  adv_window_days: 20
+  cap_on_realised_volume: true   # also cap at that share of the day's actual volume
+  max_execution_days: null       # TODO days a BUY order is worked before it lapses (sells never lapse)
+  min_trade_value_inr: 0
+  block_buy_at_upper_circuit: true
+  block_sell_at_lower_circuit: true
+
+# -----------------------------------------------------------------------------
+# 6. COST ASSUMPTIONS   (statutory charges are facts: config/statutory_charges.yaml)
+# -----------------------------------------------------------------------------
+costs:
+  brokerage_bps_per_side: null   # TODO your assumed brokerage in basis points of trade value
+  spread_model: null             # TODO corwin_schultz | abdi_ranaldo | fixed
+  fixed_half_spread_bps: null    # TODO only if spread_model: fixed
+  spread_window_days: 21
+  max_half_spread_bps: 250
+  impact_coefficient: null       # TODO k in:  impact = k x daily volatility x sqrt(order / ADV)
+  impact_vol_window_days: 60
+  dp_charge_inr_per_sell: 0      # depository charge per stock sold per day (retail accounts only)
+
+# -----------------------------------------------------------------------------
+# 7. RISK FRAMEWORK   (write the policy in docs/05_risk_policy_template.md)
+# -----------------------------------------------------------------------------
+risk:
+  var:
+    confidence: null             # TODO e.g. 0.99
+    horizon_days: 1
+    lookback_days: 500
+    method: historical           # historical | parametric | cornish_fisher
+    limit_pct_nav: null          # TODO VaR limit as a fraction of NAV
+    action: scale                # scale = cut exposure to fit the limit | flag = only report the breach
+  es:
+    confidence: null             # TODO e.g. 0.975
+    limit_pct_nav: null          # TODO Expected Shortfall limit
+  vol_target:
+    enabled: false               # optional volatility targeting
+    annual_vol: null
+    lookback_days: 126
+    min_exposure: 0.0
+    max_exposure: 1.0
+  drawdown:
+    soft_limit: null             # TODO first tier, e.g. 0.10 = 10% below the high-water mark
+    soft_exposure: null          # TODO exposure multiplier at the soft tier (0-1)
+    hard_limit: null             # TODO second tier
+    hard_exposure: null          # TODO exposure multiplier at the hard tier (0 = all cash)
+    cooloff_days: null           # TODO trading days at the hard tier before re-entry
+    soft_release_level: null     # optional: drawdown at which the soft tier is lifted (null = soft_limit)
+  stop_loss:
+    enabled: false               # optional per-stock stop
+    kind: trailing               # trailing (from the peak since entry) | from_entry
+    threshold: null
+    cooldown_days: 21
+  regime_filter:
+    enabled: false               # optional: cut exposure when an index is below its moving average
+    index: null
+    ma_days: 200
+    exposure_when_below: 0.5
+  beta:
+    max_portfolio_beta: null     # optional cap on portfolio beta (a factor limit); null = off
+    lookback_days: 252
+    benchmark: null              # index name; null = cap-weighted market built from the panel
+  hedge:
+    enabled: false               # optional index-futures overlay (see docs/04_methodology.md)
+    index: null
+    ratio: 1.0
+    margin_rate: 0.20
+    cost_bps_per_side: 2.0
+    roll_cost_bps_per_month: 2.0
+  liquidity:
+    horizon_days: 5
+    min_sellable_fraction: null  # optional monitored limit: share of the book sellable within the horizon
+  delisting_return: null         # TODO assumed return when a holding stops trading for good (e.g. -0.3)
+  max_stale_days: null           # TODO trading days without a trade before a holding is written off
+
+# -----------------------------------------------------------------------------
+# 8. STRESS TESTS
+# -----------------------------------------------------------------------------
+stress:
+  # TODO name the historical episodes to examine and give their dates. The brief
+  # suggests March 2020, the 2018 small-cap correction and a momentum crash.
+  # Look the dates up yourself (peak-to-trough of the relevant index) and cite them.
+  windows: []
+  #  - {name: "...", start: YYYY-MM-DD, end: YYYY-MM-DD}
+  market_shocks: []              # TODO instantaneous market moves, e.g. [-0.10, -0.20, -0.30]
+  adv_haircuts: []               # TODO falls in volume for the liquidity stress, e.g. [0.5, 0.75]
+  spread_multipliers: []         # TODO spread widening factors, e.g. [2, 3]
+
+# -----------------------------------------------------------------------------
+# 9. RESEARCH: what you compare on the TRAINING period (every run is logged)
+# -----------------------------------------------------------------------------
+research:
+  # TODO the parameter values you want to compare. Keys are paths into this
+  # file; each list is the values to try. Keep the grid small and motivated:
+  # every combination counts towards "how many did you try".
+  grid: {}
+  #  "signal.components.0.lookback_months": [6, 9, 12]
+  #  "portfolio.n_holdings": [20, 30, 40]
+  selection_metric: null         # TODO the metric you sort the search table by (sharpe, calmar, cagr, ...)
+  capacity_aum_inr: []           # TODO fund sizes for the capacity sweep, in rupees

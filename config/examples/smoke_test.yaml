@@ -1,0 +1,73 @@
+# =============================================================================
+# EXAMPLE CONFIGURATION - FOR CHECKING THAT THE CODE RUNS ON YOUR DATA
+# =============================================================================
+# This is NOT a strategy and NOT a recommendation. It is the plain textbook
+# momentum recipe (12-month return skipping the latest month, equal weights,
+# monthly rebalance) with round-number placeholders everywhere else. None of
+# the values has been researched or tuned.
+#
+# Because `is_example: true`, every chart it produces is stamped
+# "EXAMPLE CONFIGURATION - NOT THE GROUP'S STRATEGY" and the run is flagged in
+# the manifest. Use it once to confirm your data and installation work, then
+# build your own config/strategy.yaml from config/strategy.template.yaml.
+#
+#   python run.py train --strategy config/examples/smoke_test.yaml --out results/_example
+#
+# Adjust the four sample dates to fit the data you downloaded.
+# =============================================================================
+meta:
+  strategy_name: "EXAMPLE - textbook 12-1 momentum (placeholder values)"
+  authors: ["example"]
+  is_example: true
+sample:
+  train_start: 2015-01-01
+  train_end: 2019-12-31
+  test_start: 2020-01-01
+  test_end: 2024-12-31
+capital:
+  initial_capital_inr: 100000000      # Rs 10 crore - placeholder
+  cash_return: rf
+benchmark:
+  primary: UNIVERSE_EQUAL             # always available; replace with an index name of your choice
+  others: [UNIVERSE_CAP]
+universe:
+  source: mcap_rank
+  segments: [mid, small]
+  mcap_average_days: 126
+  min_listing_days: 252
+  min_price_inr: 10
+  min_median_traded_value_inr: 10000000
+  liquidity_lookback_days: 126
+  min_traded_days_fraction: 0.9
+signal:
+  components:
+    - {kind: return, lookback_months: 12, skip_months: 1, weight: 1.0}
+portfolio:
+  selection: top_fraction
+  top_fraction: 0.10
+  exit_rank_multiple: 1.0
+  weighting: equal
+  max_weight_per_stock: 0.05
+  max_weight_per_sector: 0.25
+  holding_months: 1
+  rebalance: monthly
+  cash_buffer: 0.02
+execution:
+  price: vwap
+  participation_cap: 0.10
+  max_execution_days: 5
+costs:
+  brokerage_bps_per_side: 10
+  spread_model: corwin_schultz
+  impact_coefficient: 0.5
+risk:
+  var: {confidence: 0.99, limit_pct_nav: 0.05, action: flag}
+  es: {confidence: 0.975, limit_pct_nav: 0.06}
+  drawdown: {soft_limit: 0.15, soft_exposure: 0.5, hard_limit: 0.30, hard_exposure: 0.0, cooloff_days: 21}
+  delisting_return: -0.3
+  max_stale_days: 20
+stress:
+  windows: []                         # add your own episodes and dates
+  market_shocks: [-0.10, -0.20, -0.30]
+  adv_haircuts: [0.5]
+  spread_multipliers: [2]
