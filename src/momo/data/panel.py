@@ -164,7 +164,7 @@ def _compute_returns(df: pd.DataFrame, cfg: DataConfig) -> pd.DataFrame:
         ret_total = (close + div_used) / base - 1.0
 
     # --- demergers: the price drop is a distribution, not a loss -----------------
-    special = (df["demerger"].fillna(False).to_numpy(bool) | df["capital_change"].fillna(False).to_numpy(bool))
+    special = df["demerger"].eq(True).to_numpy() | df["capital_change"].eq(True).to_numpy()
     neutral = np.zeros(len(df), bool)
     if cfg.demerger_treatment == "neutralise":
         neutral = special & ~exch_adj & ~has_ca & (r_raw < -0.10)

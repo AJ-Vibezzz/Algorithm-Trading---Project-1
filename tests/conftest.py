@@ -11,6 +11,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
+import os
 import shutil
 import sys
 from dataclasses import asdict
@@ -28,7 +29,8 @@ from momo.data.panel import build_panel  # noqa: E402
 from momo.data.synthetic import FixtureSpec, generate_fixture  # noqa: E402
 from momo.pipeline import Workspace, run_backtest  # noqa: E402
 
-CACHE = REPO / "data" / "_synthetic_fixture_tests"
+# Where the built fixture is cached. Override with MOMO_TEST_CACHE to force a clean build elsewhere.
+CACHE = Path(os.environ.get("MOMO_TEST_CACHE", REPO / "data" / "_synthetic_fixture_tests"))
 STATUTORY = REPO / "config" / "statutory_charges.yaml"
 STRATEGY = REPO / "tests" / "fixtures" / "fixture_strategy.yaml"
 

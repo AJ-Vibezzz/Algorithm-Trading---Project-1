@@ -93,17 +93,54 @@ class FixtureTruth:
     spec: FixtureSpec
 
 
+class _Rng:
+    """Random numbers that are identical on every NumPy version.
+
+    NumPy's modern ``Generator`` may change its streams between releases; the
+    legacy ``RandomState`` is frozen by policy. The fixture must be the same on
+    every machine (tests compare against it), so it uses the frozen one, behind
+    the handful of method names the generator below needs.
+    """
+
+    def __init__(self, seed: int):
+        self._rs = np.random.RandomState(seed)
+
+    def random(self, size=None):
+        return self._rs.random_sample(size)
+
+    def standard_normal(self, size=None):
+        return self._rs.standard_normal(size)
+
+    def normal(self, loc=0.0, scale=1.0, size=None):
+        return self._rs.normal(loc, scale, size)
+
+    def uniform(self, low=0.0, high=1.0, size=None):
+        return self._rs.uniform(low, high, size)
+
+    def integers(self, low, high, size=None):
+        return self._rs.randint(low, high, size)
+
+    def standard_t(self, df, size=None):
+        return self._rs.standard_t(df, size)
+
+    def choice(self, a, size=None, replace=True, p=None):
+        if isinstance(a, (list, tuple)) and a and isinstance(a[0], (list, tuple)):
+            return a[self._rs.randint(0, len(a))]  # pick one tuple from a list of tuples
+        return self._rs.choice(a, size=size, replace=replace, p=p)
+
+
 def _tick(x: np.ndarray) -> np.ndarray:
     return np.round(np.round(np.asarray(x, float) / 0.05) * 0.05, 2)
 
 
-def _trading_days(start: dt.date, end: dt.date, rng: np.random.Generator) -> pd.DatetimeIndex:
+def _trading_days(start: dt.date, end: dt.date, rng: "_Rng") -> pd.DatetimeIndex:
     days = pd.bdate_range(start, end)
     holidays = set()
     for year in range(start.year, end.year + 1):
         in_year = days[days.year == year]
         if len(in_year) > 40:
-            holidays |= set(rng.choice(in_year, size=min(12, len(in_year) // 20), replace=False))
+            picked = rng.choice(len(in_year), size=min(12, len(in_year) // 20), replace=False)
+            holidays |= {in_year[int(k)] for k in picked}
     keep = [d for d in days if d not in holidays]
     if pd.Timestamp(UDIFF_SWITCH_DATE) not in keep and start <= UDIFF_SWITCH_DATE <= end:
         keep.append(pd.Timestamp(UDIFF_SWITCH_DATE))
@@ -117,7 +154,7 @@ def _isin(company: int, serial: int) -> str:
 def generate_fixture(root: Path, spec: Optional[FixtureSpec] = None) -> FixtureTruth:
     """Write a complete synthetic raw-data tree under ``root`` and return the truth."""
     spec = spec or FixtureSpec()
-    rng = np.random.default_rng(spec.seed)
+    rng = _Rng(spec.seed)
     root = Path(root)
     raw = root / ("raw" if spec.layout == "raw" else "server")
     raw.mkdir(parents=True, exist_ok=True)

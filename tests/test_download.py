@@ -33,6 +33,7 @@ def server(tmp_path):
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     yield f"http://127.0.0.1:{httpd.server_address[1]}", spec
     httpd.shutdown()
+    httpd.server_close()
 
 
 def test_download_resume_and_manifest(server, tmp_path):

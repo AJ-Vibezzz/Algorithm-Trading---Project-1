@@ -87,7 +87,7 @@ def window_stress(result: BacktestResult, md: MarketData, benchmarks: pd.DataFra
             row[f"{name} return"] = _compound(b)
         if lock_long is not None:
             sub = lock_long[(lock_long["date"] >= start) & (lock_long["date"] <= end)]
-            by_day = sub.groupby("date").apply(lambda x: x.loc[x["locked_down"], "weight"].sum())
+            by_day = sub["weight"].where(sub["locked_down"], 0.0).groupby(sub["date"]).sum()
             row["holding_days_locked_at_lower_band"] = int(sub["locked_down"].sum())
             row["max_share_of_book_locked_down"] = float(by_day.max()) if len(by_day) else 0.0
         b = result.blocks
@@ -375,7 +375,8 @@ def limit_summary(breaches: pd.DataFrame, n_days: int) -> pd.DataFrame:
     if breaches.empty:
         return pd.DataFrame(columns=["days_in_breach", "share_of_days", "worst_value", "threshold", "first", "last"])
     g = breaches.groupby("limit")
-    worst = g.apply(lambda x: x.loc[(x["value"] - x["threshold"]).abs().idxmax(), "value"])
+    furthest = (breaches["value"] - breaches["threshold"]).abs().groupby(breaches["limit"]).idxmax()
+    worst = breaches.loc[furthest].set_index("limit")["value"]
     return pd.DataFrame({
         "days_in_breach": g.size(), "share_of_days": g.size() / n_days, "worst_value": worst,
         "threshold": g["threshold"].first(), "first": g["date"].min(), "last": g["date"].max(),

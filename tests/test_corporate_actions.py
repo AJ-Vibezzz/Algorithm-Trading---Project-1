@@ -1,6 +1,5 @@
 """Corporate-action text parsing and the 'final wording wins' rule."""
 
-import numpy as np
 import pandas as pd
 import pytest
 

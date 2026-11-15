@@ -4,7 +4,6 @@ import json
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from momo.config import DataConfig
 from momo.data.panel import load_panel, load_securities

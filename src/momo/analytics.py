@@ -19,7 +19,7 @@ them, is the group's analysis to write.
 
 from __future__ import annotations
 
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, Optional
 
 import numpy as np
 import pandas as pd
@@ -359,11 +359,13 @@ def attribution(result: BacktestResult, md: MarketData, by: str = "sector",
         pnl["bucket"] = pnl["sid"].map(segment_of or {}).fillna("unknown")
     else:
         raise ValueError("by must be sector, stock, year or segment")
+    pnl["contribution_gross"] = pnl["pnl_gross"] / pnl["nav_prev"]
+    pnl["contribution_net"] = pnl["net"] / pnl["nav_prev"]
     g = pnl.groupby("bucket")
     out = pd.DataFrame({
         "pnl_gross": g["pnl_gross"].sum(), "cost": g["cost"].sum(), "pnl_net": g["net"].sum(),
-        "contribution_gross": g.apply(lambda x: (x["pnl_gross"] / x["nav_prev"]).sum()),
-        "contribution_net": g.apply(lambda x: (x["net"] / x["nav_prev"]).sum()),
+        "contribution_gross": g["contribution_gross"].sum(),
+        "contribution_net": g["contribution_net"].sum(),
         "stocks": g["sid"].nunique(),
     })
     total = out["pnl_net"].sum()
