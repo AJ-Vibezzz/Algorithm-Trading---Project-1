@@ -49,7 +49,7 @@ Then with real data:
 | 2 | `python run.py download` | Run on an Indian home or campus network |
 | 3 | `python run.py build` | Read the data-quality report in `data/processed/quality/` |
 | 4 | - | Put `risk_free.csv` (and any other files you have) in `data/external/` |
-| 5 | `python run.py liquidity`, `python run.py episodes` | Look at the facts that inform your choices |
+| 5 | `python run.py sizecheck`, `python run.py liquidity`, `python run.py episodes` | Look at the facts that inform your choices |
 | 6 | - | Copy `config/strategy.template.yaml` to `config/strategy.yaml`; fill it in; record why in `docs/03_design_decisions.md` |
 | 7 | `python run.py check` | Lists anything still undecided |
 | 8 | `python run.py train` | Training-period pack in `results/train/` |
@@ -113,9 +113,11 @@ run.py                        command-line entry point
 | Data | Source |
 |---|---|
 | Daily prices, volumes, ISINs | NSE cash-market bhavcopy, `nsearchives.nseindia.com` |
-| Corporate actions, market capitalisation, price-band hits | NSE daily "PR" archive |
-| Index levels | NSE all-index closing snapshot |
-| Symbol changes, current index members (sector labels) | NSE archive static files |
+| Corporate actions, price-band hits, market capitalisation (from 2024) | NSE daily "PR" archive |
+| Market capitalisation, 2019-2024 | NSE "market capitalisation - all companies" lists |
+| Nifty 50 / Next 50 members and weights (from 2008) | NSE monthly index files |
+| Index levels (from 2012) | NSE all-index closing snapshot |
+| Symbol changes, listed securities, current index members (sector labels) | NSE archive static files |
 | Risk-free rate | RBI Database on Indian Economy (supplied by the group) |
 | Factor returns (optional) | IIM Ahmedabad Indian Fama-French-momentum data library (supplied by the group) |
 | Total-return benchmarks (optional) | NSE Indices (supplied by the group) |
@@ -124,8 +126,9 @@ URL patterns were cross-checked against the open-source `nse` and `jugaad-data` 
 
 ## Status
 
-- The automated tests (106) pass on synthetic data written in the real NSE file layouts, under Python 3.13 with pandas 2.2 / NumPy 2.1 and with pandas 3.0 / NumPy 2.5.
-- **The code has not yet been run on real NSE files**: the environment in which it was built could not reach the exchange. Expect to fix small layout differences on first contact with real data; `docs/01_data_requirements.md` lists what to check first.
+- The automated tests pass on synthetic data written in the real NSE file layouts (including every naming and layout variant met in the real archive).
+- **The data layer has been run on the full real archive, January 2010 to November 2026**: 3,267 companies, 6.9 million stock-days, one unparseable (empty) file. Rebuilding the Nifty 50 and Nifty Next 50 from their members with the adjusted returns tracks the published indices with correlation above 0.999. What the real data showed - notably that the exchange publishes market caps daily only from 2024 - is in `docs/01_data_requirements.md`.
+- No strategy has been run on real data: that needs your `config/strategy.yaml`.
 
 ## Licence and disclaimer
 

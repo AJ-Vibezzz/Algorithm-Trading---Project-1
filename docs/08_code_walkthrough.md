@@ -30,6 +30,7 @@ raw NSE files ──► data/ ──► market.py ──► universe.py ──�
 | `identifiers.py` | Gives each company one id across renames and ISIN changes with union-find; refuses to link a symbol re-used after a long gap. |
 | `ingest.py` | Raw files -> yearly parquet files. No interpretation happens here. |
 | `panel.py` | Computes adjusted returns (`_compute_returns`), spread-estimator inputs, market cap and circuit-lock flags; writes the audit log. |
+| `size.py` | Maps the exchange's market-cap lists and monthly index member lists to company ids, and estimates the daily market cap before the daily file exists. |
 | `external.py` | Loads the files you supply. |
 | `quality.py` | The data-quality report. |
 | `synthetic.py` | Test fixture generator. Not a data source. |
@@ -50,7 +51,7 @@ raw NSE files ──► data/ ──► market.py ──► universe.py ──�
 
 ## 4. Universe - `src/momo/universe.py`
 
-`build_universe` ranks stocks by trailing average market cap, assigns segments from `rank_bounds`, then applies the filters in the order of `FILTER_ORDER`, recording the first one each stock fails. `universe_benchmark_returns` builds the cap- and equal-weighted return of the eligible set. `segment_liquidity_table` describes each segment's liquidity.
+`build_universe` ranks stocks with `SizeRanker` (the first usable measure in `universe.size_metrics`), assigns segments from `rank_bounds`, then applies the filters in the order of `FILTER_ORDER`, recording the first one each stock fails. `universe_benchmark_returns` builds the cap- and equal-weighted return of the eligible set. `segment_liquidity_table` describes each segment's liquidity.
 
 *Can you explain:* why the ranking uses a six-month average and only stocks that traded in the last five sessions? Why the order of the filters affects the "reason" counts but not who is eligible?
 

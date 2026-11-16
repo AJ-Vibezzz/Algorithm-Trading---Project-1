@@ -58,6 +58,16 @@ universe:
     small: [251, 500]
     micro: [501, 750]
   mcap_average_days: 126         # six-month average market cap, as in the index reviews
+  # How "size" is measured, in order of preference (required for mcap_rank). The exchange publishes
+  # market caps daily only from Jan 2024; run `python run.py sizecheck` to see which measure exists when.
+  #   exchange_mcap  daily file (2024+); before it the latest exchange list carried forward (Apr 2020+)
+  #   exchange_list  rank in the exchange's latest market-cap list (Apr 2019+)
+  #   amfi_list      AMFI half-yearly list, if you put the files in data/external/amfi/
+  #   traded_value   median traded value - a liquidity measure standing in for size; always available
+  # On each date the first measure that can rank deep enough is used; the universe table records which.
+  size_metrics: null             # TODO e.g. [exchange_mcap, exchange_list, traded_value]
+  large_cap_indices: []          # optional: e.g. [NIFTY 50, NIFTY NEXT 50] fixes the top 100 from the
+                                 # exchange's monthly member lists (2008+), whatever the size measure
   index_names: []                # only for source: index_constituents
   allowed_series: [EQ]           # EQ only: BE/BZ (trade-for-trade, a surveillance outcome) are excluded
   min_listing_days: null         # TODO minimum trading days since listing

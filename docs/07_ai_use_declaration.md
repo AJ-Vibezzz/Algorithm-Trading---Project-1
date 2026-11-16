@@ -17,6 +17,7 @@ This file records, accurately, what the AI assistant did in building this reposi
 | same | Drafting the structure of the design sheet, risk policy, report and Q&A list (headings and questions; no conclusions) | `docs/03`, `05`, `06`, `09` | |
 | same | Writing documentation of the code and data | `README.md`, `docs/01`, `04`, `08`, `10`, `config/strategy.template.yaml`, `config/data.yaml` | |
 | same | An example configuration with placeholder values, to check that the code runs | `config/examples/smoke_test.yaml` | |
+| same | Downloading the public NSE archive (2010-2026), adapting the parsers and corporate-action rules to what the real files contain, and building an index-replication check of the adjusted returns. It reported data facts only (coverage, file layouts, check statistics); no strategy was run on the real data | `src/momo/data/`, `docs/01`, `docs/04` section 9 | |
 | | | | |
 | | | | |
 

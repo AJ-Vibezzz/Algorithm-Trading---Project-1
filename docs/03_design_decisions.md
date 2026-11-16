@@ -24,7 +24,7 @@ Nothing below tells you which option to pick. Where the evidence points two ways
 - The data must start a full signal look-back (plus your minimum listing age) before `train_start`.
 - A longer training period gives more market regimes to learn from; a longer test period gives a more convincing out-of-sample result. You cannot have both.
 - Which period contains the stress episodes you want to discuss? An episode in the training period has shaped your choices; one in the test period has not.
-- The exchange's daily market-cap and corporate-action files must exist for your whole sample. After downloading, check `data/processed/quality/by_year.csv`, column `share_rows_with_shares_outstanding`; if early years are empty, either start later or accept the weaker traded-value size proxy for those years and say so.
+- **What the real archive holds (checked on the files for 2010-2026):** prices and corporate actions from 2010; index levels from February 2012; ISINs in the price file from 22 June 2011; the exchange's market-cap lists from 31 March 2019 (ranks only) and 31 March 2020 (values); the daily market-cap file only from January 2024. Before April 2019 no exchange measure of market cap exists in the public archive, so a sample starting earlier must rank size by traded value (or by AMFI lists you obtain) for those years. Run `python run.py sizecheck` and look at `data/processed/quality/by_year.csv` (columns `share_rows_mcap_from_*`) before you choose.
 - Expect weaker results out of sample: McLean & Pontiff (2016) document this for published anomalies generally.
 
 **Our decision:** ______________________  **Why:** ______________________
@@ -58,7 +58,11 @@ Fund size is not a detail: it sets how large each order is relative to daily vol
 
 **Controls:** `universe.*`.
 
-**Options:** `source: mcap_rank` (rebuild segments from the exchange's daily market-cap file) or `index_constituents` (your own point-in-time membership file); any subset of mid / small / micro; filters on listing age, price, liquidity, share of days traded, share of days at a price band, surveillance status.
+**Options:** `source: mcap_rank` (rebuild segments from a size ranking on each date) or `index_constituents` (your own point-in-time membership file); any subset of mid / small / micro; filters on listing age, price, liquidity, share of days traded, share of days at a price band, surveillance status.
+
+**Size measure (`universe.size_metrics`, `universe.large_cap_indices`).** Which measures you accept, and in which order, decides what "small cap" means in each year of your sample. Facts to weigh: `python run.py sizecheck` prints when each measure exists and, on dates where two exist, their rank correlation and how many stocks land in the same segment under both - that tells you how good traded value is as a stand-in for market cap in your data. The monthly Nifty 50 / Next 50 member lists (2008 onwards) can fix the top 100 whatever the measure. AMFI's half-yearly lists (from 2018) are the categorisation SEBI uses for fund mandates; they are not on the exchange archive and would have to be downloaded by you from amfiindia.com into `data/external/amfi/`.
+
+**Our decision on the size measure:** ______________________  **Why:** ______________________
 
 **Conventions (facts):** SEBI defines large cap as ranks 1-100, mid cap 101-250 and small cap 251 onwards by full market capitalisation. NSE's Smallcap 250 and Microcap 250 indices cover ranks 251-500 and the next 250.
 

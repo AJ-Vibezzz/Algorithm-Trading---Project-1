@@ -13,8 +13,8 @@ Section numbers of the brief ("Requirements for every project") are in brackets.
 | Input | How it is kept point-in-time |
 |---|---|
 | Prices, volumes | From the exchange's daily bhavcopy for each date. Signals use rows up to *t* only. |
-| Market capitalisation | Shares outstanding come from the exchange's market-cap file *for that date* (inside the daily "PR" archive), not from today's share count. |
-| Universe | Rebuilt on every decision date from the trailing average market cap and trailing liquidity. Today's index members are never applied to the past. |
+| Market capitalisation | From the exchange's daily market-cap file for that date (January 2024 onwards). Before it, the market cap in the exchange's latest published market-cap list (from 31 March 2020), carried forward with the split-adjusted price; a list is used only from 30 days after its as-on date and for at most 400 days. Where both exist the estimate is within 5% of the daily figure on 93% of stock-days. |
+| Universe | Rebuilt on every decision date from the size measures the group lists, in order (`universe.size_metrics`), and trailing liquidity. The measure used on each date is recorded. Today's index members are never applied to the past; the monthly index member lists used for `large_cap_indices` are dated month-end lists. |
 | Corporate actions | Taken from the exchange's daily listing of forthcoming actions; the date each action first appeared is stored (`first_seen`), so it can be shown to have been public before its ex-date. |
 | Liquidity cap | Uses average traded value up to the day *before* the trade. |
 | Risk-free rate | The latest *published* yield is carried forward; no interpolation from later values. |
@@ -32,7 +32,7 @@ Section numbers of the brief ("Requirements for every project") are in brackets.
 1. Every daily bhavcopy from the start date is downloaded, so every security that traded on any day is present, including those that later delisted, merged or were suspended.
 2. Lines that are not ordinary equity shares are dropped: series other than EQ/BE/BZ, and ISINs that are not equity shares (this removes ETFs, which trade in the EQ series).
 3. Each company gets one permanent id across symbol changes (same ISIN, or the exchange's symbol-change list) and ISIN changes (same symbol, continuous in time). A symbol re-used by an unrelated company after a long gap is treated as a new company (`identifiers.py`).
-4. On each decision date, all companies that traded within the last five sessions are ranked by trailing average market cap; segments are cut from that ranking.
+4. On each decision date, all companies that traded within the last five sessions are ranked by the first size measure in `universe.size_metrics` that can rank deep enough on that date (see the table above); segments are cut from that ranking.
 
 **What happens to a holding that stops trading:** it cannot be sold. It is carried at its last price; after `risk.max_stale_days` sessions without a trade it is written off at `risk.delisting_return`, or at the stock-specific outcome if you supply `data/external/delistings.csv`. Each write-off is listed in `15_writeoffs.csv`.
 
@@ -133,22 +133,28 @@ Costs are reconciled three ways (trade log, daily totals, per-stock P&L).
 
 ## 9. How returns are adjusted for corporate actions
 
-For each stock-day the code compares the exchange's `prevclose` with that stock's previous traded close:
+**Fact found on the real files:** the bhavcopy's previous-close field is *not* adjusted on ex-dates (checked across 2010-2026: of about 1,400 splits, bonuses and rights issues, fewer than ten carry an adjusted previous close). Every adjustment therefore has to come from other evidence. For each stock-day the code uses, in this order:
 
-| Situation | Base price used for the day's return | Logged as |
+| Evidence | Base price for the day's return | Logged as |
 |---|---|---|
-| They agree, no action on record | previous close | - |
-| Exchange base differs, and the action text (bonus / split / rights) implies the same factor | exchange base | `exchange+ca_text` |
-| Exchange base differs, no action on record | exchange base | `exchange_only` |
-| Exchange base differs from what the text implies | exchange base | `exchange_vs_ca_text_mismatch` |
-| Exchange base unchanged, but the text gives a factor that explains the jump | previous close x factor | `ca_text_only` |
-| Text gives a large factor that would make the jump bigger | previous close (text ignored) | `ca_text_rejected` |
-| Demerger or scheme of arrangement, price falls more than 10%, no adjusted base | return set to zero | `demerger_neutralised` |
-| Move above 25% with nothing to explain it | left as is | `unexplained_jump` |
+| The corporate-action text gives a split / bonus / rights factor, and (for a large factor) it brings the day's move closer to zero | previous close x factor | `ca_text_only` |
+| The same, but the text was cut off before the ratio ("FV SPLIT FROM RS10 TO RS"); the standard ratio that fits the price is taken | previous close x inferred factor | `ca_ratio_inferred` |
+| The text's ex-date is a session off and the neighbouring day shows exactly that jump | moved to that day | `ca_text_date_shifted` |
+| No text, but the exchange's daily share count changed by a standard ratio and the price moved by it (2024 onwards) | previous close x share ratio | `daily_file_shares` |
+| No text, but the ISIN changed and the price moved by a face-value ratio | previous close x that ratio | `isin_change_split` |
+| The exchange's previous close agrees with the text, or shows a standard ratio on its own | exchange base | `exchange+ca_text`, `exchange_only` |
+| Text gives a large factor the price does not show | previous close (text ignored) | `ca_text_rejected` |
+| Demerger or scheme of arrangement, price falls more than 10%, nothing else explains it | return set to zero | `demerger_neutralised` |
+| Stock resumes trading after more than 30 days | no return that day | `resumed_after_long_halt` |
+| Move above 25% (and more than three ticks) with nothing to explain it | left as is | `unexplained_jump` |
 
-Dividends parsed from the action text are added to the day's return. The listing day's "return" from the issue price is discarded. Every non-trivial case is written to `data/processed/adjustment_log.csv`; hand corrections go in `data/external/return_overrides.csv`.
+**Reading the texts.** The purpose field holds about 25 characters, so the exchange abbreviates and runs words together (`BON1:1/FV SPL RS.10TORE.1`, `INTDV/SPDV - RS 170 & 25`). The parser was written against every distinct text in the 2010-2026 files; 3 of about 4,200 distinct texts remain unrecognised and are listed in the quality report. The daily listings are collapsed into events by the patterns observed: a corrected text replaces the earlier one; separate events listed side by side (a bonus and a dividend) are combined; the same event listed twice in different words counts once; a listing that stopped well before its ex-date was withdrawn.
 
-**This logic was validated against a synthetic answer key, not yet against real NSE files** (the build environment could not reach the exchange). When you first run it on real data, read the quality report and spot-check at least a dozen rows of the adjustment log against exchange notices or an adjusted-price source.
+**Dividends** are added to the day's return. A dividend above 20% of the price is used only if it explains the fall (special dividends of that size do occur; so do misread amounts). Rights issues are priced at premium + face value; the face value comes from the exchange's daily file, the list of listed securities (by ISIN) and the split texts, and where it cannot be established the premium alone is used and the row is labelled.
+
+**Independent check.** The quality report rebuilds the Nifty 50 and Nifty Next 50 from their published month-end members and weights, using these adjusted returns, and compares the result with the published indices. On the 2012-2026 data: correlation 0.9997 and 0.9992, mean daily difference 0.5 bp and 1.2 bp, one and seven days with a difference above 40 bp. A missed split in a member would show as a large one-day difference naming that stock.
+
+Every non-trivial row is in `data/processed/adjustment_log.csv`; the judgement-based ones are collected in `quality/adjustments_to_check.csv` and the unexplained moves in `quality/unexplained_jumps.csv` (157 on the full history, mostly genuine crashes such as Yes Bank in March 2020 - check them against news before overriding any in `data/external/return_overrides.csv`).
 
 ---
 
@@ -156,12 +162,12 @@ Dividends parsed from the action text are added to the day's return. The listing
 
 Write your own assessment of which of these matter for your strategy.
 
-1. **Real-data validation is outstanding.** File layouts were taken from memory and from open-source libraries, and tested on synthetic files written in those layouts.
-2. **Sector labels are not point-in-time**, and delisted companies have no label unless you supply one; they fall into `UNKNOWN`, which is treated as one sector.
+1. **No exchange market cap before April 2019** in the public archive; from April 2020 to December 2023 market cap is an estimate (latest list x price change), which misses share issues and buy-backs between lists. Years before 2019 can only be ranked by traded value unless you supply AMFI lists.
+2. **Sector labels are not point-in-time**, and delisted companies have no label unless you supply one (on the full history about 2,500 of 3,267 companies have none). An unlabelled company is treated as its own group for the sector limit, so the limit only binds on labelled sectors.
 3. **Surveillance lists** are proxied by the trading series unless you supply the ASM/GSM history.
 4. **Delisting outcomes** are one blanket assumption unless you supply stock-specific outcomes.
 5. **Demergers:** the ex-date drop is neutralised and the spun-off company's later return is not captured.
-6. **Market cap right after a bonus or split** can be understated for a few days if the exchange's share count updates late; the six-month average dampens this.
+6. **Corporate actions rest on the exchange's text**, cut off at 25 characters. Ratios missing from the text are inferred from the price (3 cases on the full history), and unexplained moves are flagged, not corrected. Index levels before February 2012 are not in the archive.
 7. **Execution at the day's VWAP** assumes an order spread evenly through the session. A lock is judged at the close; a stock that locked only part of the day is treated as tradable.
 8. **Spread estimators** are noisy for individual stocks and can read zero in quiet periods; the tick floor uses Rs 0.05 throughout.
 9. **Impact** is a one-parameter square-root model with no memory: yesterday's trading does not raise today's cost.
