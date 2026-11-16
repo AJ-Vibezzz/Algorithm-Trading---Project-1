@@ -581,6 +581,9 @@ class DataConfig:
     demerger_treatment: str = "neutralise"  # neutralise | raw
     include_dividends: bool = True
     symbol_reuse_gap_days: int = 180
+    # A stock that resumes trading after more than this many calendar days gets no return on the day
+    # it resumes: the price change across a long halt cannot be measured or acted on.
+    resume_gap_days: int = 30
     data_kind: str = "real"  # "synthetic" only for the test fixture
 
     @classmethod

@@ -228,12 +228,12 @@ def construct(
     banned: Optional[np.ndarray] = None,
 ) -> Construction:
     """Build the fresh target portfolio for decision row ``t``."""
-    names, n_target, n_scoreable, kept, blocked = select_names(score, eligible, held, md.sector, cfg, banned)
+    names, n_target, n_scoreable, kept, blocked = select_names(score, eligible, held, md.sector_for_limits, cfg, banned)
     weights = np.zeros(md.N)
     unplaced = 0.0
     if len(names):
         w = raw_weights(names, score, md, t, cfg)
-        w, unplaced = apply_caps(w, md.sector[names], cfg.max_weight_per_stock, cfg.max_weight_per_sector)
+        w, unplaced = apply_caps(w, md.sector_for_limits[names], cfg.max_weight_per_stock, cfg.max_weight_per_sector)
         weights[names] = w
     return Construction(
         weights=weights, names=names, n_target=n_target, n_scoreable=n_scoreable,

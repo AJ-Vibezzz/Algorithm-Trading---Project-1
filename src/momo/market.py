@@ -69,6 +69,10 @@ class MarketData:
         self.securities = securities.set_index("sid").reindex(sids)
         self.symbols = self.securities["symbol"].fillna("?").to_numpy(dtype=object)
         self.sector = self.securities["sector"].fillna("UNKNOWN").to_numpy(dtype=object)
+        # For sector limits a company without a label is a group of its own: "no label" is not a
+        # sector, and lumping the unlabelled companies together would cap them as if they were one.
+        self.sector_for_limits = np.array(
+            [s if s != "UNKNOWN" else f"UNLABELLED:{sid}" for s, sid in zip(self.sector, sids)], dtype=object)
         self.indices = indices  # dates x index name (levels, forward-filled)
         self.rf_daily = rf_daily.reindex(dates).fillna(0.0).to_numpy()
         self.rf_missing = bool(rf_daily.attrs.get("missing", False))

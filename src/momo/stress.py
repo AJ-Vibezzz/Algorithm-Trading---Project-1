@@ -353,7 +353,8 @@ def limit_monitor(result: BacktestResult, md: MarketData, cfg: StrategyConfig,
         mx = pos.groupby("date")["weight"].max()
         add(mx[mx > pf.max_weight_per_stock + tol].index, mx[mx > pf.max_weight_per_stock + tol],
             "stock_weight", pf.max_weight_per_stock)
-        sector = pos["sid"].map(dict(zip(md.sids, md.sector)))
+        # the sector limit applies to labelled sectors; a company without a label is its own group
+        sector = pos["sid"].map(dict(zip(md.sids, md.sector_for_limits)))
         sw = pos.assign(sector=sector).groupby(["date", "sector"])["weight"].sum().groupby("date").max()
         add(sw[sw > pf.max_weight_per_sector + tol].index, sw[sw > pf.max_weight_per_sector + tol],
             "sector_weight", pf.max_weight_per_sector)

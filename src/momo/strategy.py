@@ -51,7 +51,8 @@ class MomentumStrategy:
     def __init__(self, md: MarketData, cfg: StrategyConfig, universe: Universe):
         self.md, self.cfg, self.universe = md, cfg, universe
         p = cfg.portfolio
-        self.tranches = TrancheBook(tranche_count(p), p.max_weight_per_stock, p.max_weight_per_sector, md.sector)
+        self.tranches = TrancheBook(tranche_count(p), p.max_weight_per_stock, p.max_weight_per_sector,
+                                    md.sector_for_limits)
         self.base_exposure = p.gross_exposure * (1.0 - p.cash_buffer)
         # Benchmark for betas: a named index, else the cap-weighted market built from the panel.
         name = cfg.risk.beta.benchmark

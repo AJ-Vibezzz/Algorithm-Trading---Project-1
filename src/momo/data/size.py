@@ -39,7 +39,7 @@ from ..config import DataConfig
 from ..utils import to_ns
 
 SIZE_LIST_COLUMNS = ["source", "as_of", "effective", "sid", "symbol", "rank", "mcap"]
-INDEX_MEMBER_COLUMNS = ["as_of", "index_name", "sid", "symbol"]
+INDEX_MEMBER_COLUMNS = ["as_of", "index_name", "sid", "symbol", "weight"]
 MCAP_SRC_NONE, MCAP_SRC_DAILY, MCAP_SRC_LIST = 0, 1, 2
 ANCHOR_TOLERANCE_DAYS = 10  # a list value is anchored to a price at most this many days before the as-on date
 

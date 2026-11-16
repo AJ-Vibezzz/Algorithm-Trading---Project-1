@@ -51,15 +51,18 @@ _SPLIT_WORD = r"(?:SPL(?:IT|T)?|SPTL?|FVS|SUB\s*-?\s*DIV(?:ISION)?|SUBDIVISION)"
 # keyword, a little filler ("(SUB-DIVISION) - FROM RS"), the old value, "TO", the new value (may be cut off)
 _SPLIT = re.compile(_SPLIT_WORD + r"[^0-9|]{0,34}?" + _NUM + r"\s*(PAISE|PAISA|PS)?\s*(?:(?:PER|PR)\s*SH\w*|EACH)?\s*TO\s*"
                     r"(?:RS)?\s*" + _NUM + r"?\s*(PAISE|PAISA|PS)?")
-_CONSOL = re.compile(r"CONSOL\w*[^0-9|]{0,34}?" + _NUM + r"\s*(?:(?:PER|PR)\s*SH\w*|EACH)?\s*TO\s*(?:RS)?\s*" + _NUM)
-_RIGHTS_WORD = r"(?<![A-Z])(?:RIGHTS?|RHTS?|RGHTS?|RGTS?|RH)(?![A-Z])"
+_CONSOL = re.compile(r"C(?:O)?NSO?L\w*[^0-9|]{0,34}?" + _NUM + r"\s*(?:(?:PER|PR)\s*SH\w*|EACH)?\s*TO\s*(?:RS)?\s*" + _NUM)
+_RIGHTS_WORD = r"(?<![A-Z])(?:RIGHTS?|RIGTS?|RHTS?|RGHTS?|RGTS?|RH)(?![A-Z])"
 _RIGHTS = re.compile(_RIGHTS_WORD + r"[\s@:\-]*(?:EQ)?\s*(\d+)\s*:\s*(\d+)")
 _RIGHTS_ANY = re.compile(_RIGHTS_WORD)
 _RIGHTS_OTHER = re.compile(r"CCD|NCD|WRNT|WARRANT|PARTLY|\bDEB\b|\dW\b")  # rights to something other than plain shares
 _PREMIUM = re.compile(r"(?<![A-Z])P(?:R|E)[A-Z]{0,5}M(?![A-Z])[\s@]*(?:RS)?\s*" + _NUM)  # PRM, PREM, PREMIUM, PREUM ...
 _AT_PAR = re.compile(r"(?:@|\bAT)\s*PAR\b")
 # "DIV", "DIVIDEND", "INTDIV", "SPLDIV", "DV" - but not the DIV of "SUB DIV(ISION)" (a split).
-_DIV_WORD = re.compile(r"(?<!SUB)(?<!SUB )(?<!SUB-)DIV(?!ISION)|(?<![A-Z])DV(?![A-Z])")
+_DIV_WORD = re.compile(r"(?<!SUB)(?<!SUB )(?<!SUB-)DIV(?!ISION)|(?:(?<![A-Z])|(?<=INT)|(?<=FIN)|(?<=SP)|(?<=SPL))DV(?![A-RT-Z])")
+# Two dividends in the shorthand of 2022 onwards: "INTDV/SPDV - RS 170 & 25", "DVSPDV - RS 35/RS 130".
+# Every number after the two labels is an amount.
+_TWO_DIVIDENDS = re.compile(r"(?:INT|FIN)?\W*DV\W*SPL?DV|INT\W*/\W*SPL?DV")
 _AMOUNT_RS = re.compile(r"\bRS\s*" + _NUM)
 _AMOUNT_PAISE = re.compile(_NUM + r"\s*(?:PAISE|PAISA)\b")
 _AMOUNT_PCT = re.compile(_NUM + r"\s*%")
@@ -75,7 +78,7 @@ _DIV_IMPLIED = re.compile(r"^(?:\W*(?:FIN(?:AL)?|INT(?:ERIM)?|SPL|SPECIAL|IDV)\W
 _NO_PRICE_EFFECT = re.compile(
     r"\bAGM\b|\bEGM\b|\bEOGM\b|ANNUAL GENERAL|EXTRA.?ORDINARY GENERAL|GENERAL MEETING|BUY\s*-?\s*BACK|INTEREST|"
     r"REDEMP|\bCOURT CONVENED\b|POSTAL BALLOT|\bMEETING\b|CLOSURE|CLOSING|E\s*-?\s*VOTING|\bDISTRIBUTION\b|"
-    r"ELECTION|PURPOSE|\bEXIT\b|DELIST|CONV TO"
+    r"ELECTION|PURPOSE|\bEXIT\b|DELIST|CONV TO|EXTRA|GEN\w* M|SUSPENSION|ATTRIBUTE|CALL MONEY|\b(?:FIRST|FINAL) CL\b"
 )
 
 
@@ -130,7 +133,7 @@ def parse_purpose(text: str) -> ParsedAction:
     m = _BONUS.search(t)
     if m and not not_shares:
         a, b = float(m.group(1)), float(m.group(2))
-        if 0 < a <= 100 and 0 < b <= 100:
+        if 0 < a <= 10000 and 0 < b <= 10000:  # "BONUS 1 : 1250" and "BONUS 25:202" both occur
             bonus_factor = b / (a + b)
             recognised = True
         rest = rest.replace(m.group(0), " | ")
@@ -183,6 +186,9 @@ def parse_purpose(text: str) -> ParsedAction:
         amounts = [float(x) for x in _AMOUNT_RS.findall(rest)] + [float(x) for x in _AMOUNT_BARE.findall(rest)]
         paise = [float(x) for x in _AMOUNT_PAISE.findall(rest)]
         pct = [float(x) for x in _AMOUNT_PCT.findall(rest)]
+        two = _TWO_DIVIDENDS.search(rest)
+        if two:
+            amounts = [float(x) for x in re.findall(_NUM, rest[two.end():])]
         if paise:
             dividend = sum(paise) / 100.0
         elif pct:

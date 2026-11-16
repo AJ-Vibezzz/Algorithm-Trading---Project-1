@@ -297,3 +297,59 @@ def test_face_value_is_rebuilt_along_the_chain_of_splits(tmp_path):
     assert fv[4:7].tolist() == [2.0, 1.0, 1.0], "known today, doubled going back across the split"
     assert np.isnan(fv[7:]).all(), "nothing is assumed for a company with no anchor"
     assert stats["share_of_rows_with_face_value"] == pytest.approx(7 / 9, abs=1e-4)
+
+
+# --------------------------------------------------------------------------- evidence other than the text
+def test_split_missing_from_the_text_file_is_taken_from_the_exchange_s_share_count():
+    # 10 January 2025: no corporate-action row was published, but the daily file shows the issue size x5.
+    out = _returns(close_prev=[2809.85, 63.50, 55.12], close=[532.00, 67.79, 48.76],
+                   shares=[1880293885.0, 106.0, 114.6], shares_prev=[376058777.0, 100.0, 100.0])
+    assert out["adj_source"].tolist() == ["daily_file_shares", "", ""]
+    assert out["ca_factor"].iloc[0] == pytest.approx(0.2) and out["ret_price"].iloc[0] == pytest.approx(532 / 561.97 - 1)
+    assert out["ret_price"].iloc[1] == pytest.approx(67.79 / 63.50 - 1), \
+        "6% more shares (options, a placement) on a day the price rose is not a corporate action"
+    assert out["ret_price"].iloc[2] == pytest.approx(48.76 / 55.12 - 1), \
+        "nor is 15% more shares on a day the price fell 11%: the price must move by the ratio"
+
+
+def test_change_of_isin_with_a_standard_ratio_in_the_price_is_a_split():
+    out = _returns(close_prev=[1773.30, 292.90, 200.0], close=[441.05, 351.45, 58.0],
+                   isin=["INE466L01038", "INE475E01026", "INE000A01011"],
+                   isin_prev=["INE466L01020", "INE475E01018", "INE000A01011"])
+    assert out["adj_source"].tolist() == ["isin_change_split", "", "unexplained_jump"]
+    assert out["ca_factor"].iloc[0] == pytest.approx(0.25)
+    assert out["ret_price"].iloc[1] == pytest.approx(0.1999, abs=1e-4), "a +20% day is not a face-value change"
+
+
+def test_an_event_dated_a_session_early_moves_to_the_day_the_price_adjusted():
+    # the split is listed for the first day, but the price fell to a fifth on the second
+    out = _returns(sid=[7, 7, 7], close_prev=[133.85, 140.50, 29.50], close=[140.50, 29.50, 30.10],
+                   split_factor=[0.2, np.nan, np.nan])
+    assert out["adj_source"].tolist() == ["", "ca_text_date_shifted", ""]
+    assert out["ret_price"].iloc[0] == pytest.approx(140.50 / 133.85 - 1)
+    assert out["ret_price"].iloc[1] == pytest.approx(29.50 / (140.50 * 0.2) - 1)
+
+
+def test_exchange_previous_close_is_used_only_when_something_supports_it():
+    # The exchange's own field holds, in turn: the base adjusted for a split that is also in the
+    # text; a notional base after a relisting; a stale base in the call-auction segment; the new
+    # base it set after a scheme of arrangement.
+    df = pd.DataFrame({"close_prev": [45.75, 8.82, 2.81, 228.30], "close": [24.00, 86.43, 2.76, 161.80],
+                       "prevclose": [22.90, 2.10, 2.86, 170.00], "split_factor": [0.5, np.nan, np.nan, np.nan]})
+    blank = {"face_value": np.nan, "bonus_factor": np.nan, "rights_new": np.nan, "rights_held": np.nan,
+             "rights_premium": np.nan, "dividend": np.nan, "dividend_pct_fv": np.nan, "demerger": False,
+             "capital_change": False, "split_unknown": False, "bonus_unknown": False, "old_face_value": np.nan}
+    out = _compute_returns(df.assign(**blank), DataConfig())
+    assert out["adj_source"].tolist() == ["exchange+ca_text", "unexplained_jump", "", "exchange_only"]
+    assert out["ret_price"].iloc[0] == pytest.approx(24.00 / 22.90 - 1)
+    assert out["ret_price"].iloc[1] == pytest.approx(86.43 / 8.82 - 1), "a notional base of Rs 2.10 would give +4,000%"
+    assert out["ret_price"].iloc[2] == pytest.approx(2.76 / 2.81 - 1), "a stale base would overstate every fall"
+    assert out["ret_price"].iloc[3] == pytest.approx(161.80 / 170.00 - 1)
+
+
+def test_no_return_is_attributed_to_the_day_trading_resumes_after_a_long_halt():
+    out = _returns(close_prev=[313.0, 100.0], close=[794.5, 104.0],
+                   date=[pd.Timestamp("2026-04-20"), pd.Timestamp("2026-04-20")],
+                   date_prev=[pd.Timestamp("2023-10-25"), pd.Timestamp("2026-04-06")])
+    assert np.isnan(out["ret_total"].iloc[0]) and out["adj_source"].iloc[0] == "resumed_after_long_halt"
+    assert out["ret_total"].iloc[1] == pytest.approx(0.04), "a fortnight without a trade is not a halt"

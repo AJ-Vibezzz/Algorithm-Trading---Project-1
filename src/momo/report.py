@@ -190,6 +190,8 @@ def build_report_pack(ws: Workspace, cfg: StrategyConfig, variants: Dict[str, Ba
         sector = pos["sid"].map(dict(zip(md.sids, md.sector)))
         sw = pos.assign(sector=sector).groupby(["date", "sector"])["weight"].sum().unstack(fill_value=0.0)
         sw = sw.reindex(net.daily.index).fillna(0.0)
+        # Companies without a sector label cannot be held to the sector limit: show them apart.
+        sw = sw.rename(columns={"UNKNOWN": "(no sector label - limit not applied)"})
         table("16_sector_weights_avg_peak", pd.DataFrame({"average": sw.mean(), "peak": sw.max()}))
         figure("14_sector_weights", plots.sector_weights(sw.mean(), sw.max(), cfg.portfolio.max_weight_per_sector))
         conc = pos.groupby("date")["weight"].apply(lambda w: pd.Series(concentration(w.to_numpy()))).unstack()

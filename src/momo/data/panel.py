@@ -47,6 +47,8 @@ from .size import build_index_members, build_size_lists, estimate_mcap
 
 LARGE_DIVIDEND = 0.20  # share of the previous close above which a dividend must explain the price fall
 JUMP_MIN_TICKS = 3  # an unexplained move must exceed this many ticks to be flagged for review
+SMALL_FACTOR = 0.15  # a factor closer to 1 than this (a rights issue) cannot be judged against the day's move
+MIN_PRICE_FOR_EXCHANGE_BASE = 5.0  # below this a one-tick difference already looks like a "ratio"
 
 PANEL_COLUMNS = [
     "date", "sid", "symbol", "series", "isin",
@@ -201,20 +203,113 @@ def _infer_cut_off_ratios(df: pd.DataFrame, f_text: np.ndarray, close: np.ndarra
     return inferred
 
 
+def _standard_ratios() -> np.ndarray:
+    """Price factors of the standard corporate actions: splits and consolidations between the usual
+    face values, bonus issues in small whole numbers, and a split and a bonus together."""
+    splits = {new / old for old in _FACE_VALUES + (100.0,) for new in _FACE_VALUES + (100.0,) if new != old}
+    bonuses = {b / (a + b) for a in range(1, 11) for b in range(1, 11)}
+    both = {x * y for x in (0.5, 0.2, 0.1, 0.4, 0.25) for y in (0.5, 2 / 3, 1 / 3, 0.25, 0.75, 0.8)}
+    # A consolidation at least halves the share count; a bonus of less than 1:10 is too close to an
+    # ordinary day's move to be told apart. Ratios between 0.91 and 2 are therefore left out.
+    return np.array(sorted(x for x in splits | bonuses | both if x <= 0.91 or x >= 2.0))
+
+
+_STANDARD = _standard_ratios()
+# Face-value changes move the price by a whole multiple: at least halving or doubling it.
+_FACE_VALUE_RATIOS = np.array(sorted({new / old for old in _FACE_VALUES + (100.0,) for new in _FACE_VALUES + (100.0,)
+                                      if new / old <= 0.5 or new / old >= 2.0}))
+
+
+def _near_standard(x: np.ndarray, tolerance: float = 0.02) -> np.ndarray:
+    """True where ``x`` is within ``tolerance`` (relative) of a standard corporate-action factor."""
+    x = np.asarray(x, float)
+    k = np.clip(np.searchsorted(_STANDARD, x), 1, len(_STANDARD) - 1)
+    nearest = np.where(np.abs(_STANDARD[k] - x) < np.abs(_STANDARD[k - 1] - x), _STANDARD[k], _STANDARD[k - 1])
+    with np.errstate(invalid="ignore", divide="ignore"):
+        return np.isfinite(x) & (np.abs(x / nearest - 1.0) <= tolerance)
+
+
+def _shift_misdated_actions(df: pd.DataFrame) -> np.ndarray:
+    """Move a split or bonus to the day the price actually adjusted, if that is a day or two away.
+
+    From 2022 the ex-date in the exchange's file is sometimes one session off
+    (the move to T+1 settlement changed how ex-dates relate to record dates).
+    A large factor that does nothing for the price on its listed day, while a
+    neighbouring day shows exactly that jump and has no event of its own, is
+    moved to that day. Returns a mask of the rows that received a moved event;
+    ``df`` (sorted by company and date) is updated in place.
+    """
+    cols = [c for c in ("split_factor", "bonus_factor", "split_unknown", "bonus_unknown", "old_face_value",
+                        "new_face_value") if c in df.columns]
+    f = np.array(df["split_factor"].fillna(1.0) * df["bonus_factor"].fillna(1.0), dtype=float)  # a writable copy
+    close, cp = df["close"].to_numpy(float), df["close_prev"].to_numpy(float)
+    sid = df["sid"].to_numpy()
+    moved = np.zeros(len(df), bool)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        r_raw = close / cp - 1.0
+        fits_here = np.abs(close / (cp * f) - 1.0) < np.abs(r_raw)
+    for i in np.where((np.abs(f - 1.0) >= SMALL_FACTOR) & np.isfinite(cp) & ~fits_here)[0]:
+        for k in (i + 1, i - 1, i + 2, i - 2):
+            if not (0 <= k < len(df)) or sid[k] != sid[i] or abs(f[k] - 1.0) > 1e-9 or not np.isfinite(cp[k]):
+                continue
+            if abs(r_raw[k]) >= SMALL_FACTOR and abs(close[k] / (cp[k] * f[i]) - 1.0) <= INFER_MAX_RESIDUAL:
+                for c in cols:
+                    at = df.columns.get_loc(c)
+                    df.iat[k, at] = df.iat[i, at]
+                    df.iat[i, at] = False if c.endswith("_unknown") else np.nan
+                moved[k] = True
+                f[k], f[i] = f[i], 1.0
+                break
+    return moved
+
+
 def _compute_returns(df: pd.DataFrame, cfg: DataConfig) -> pd.DataFrame:
-    """Daily price and total returns with corporate-action handling. See module docstring."""
+    """Daily price and total returns with corporate-action handling.
+
+    ``df`` holds one row per company and day, sorted by company and date. The
+    return on a day is ``close / base - 1`` where ``base`` is the previous
+    close, adjusted when a corporate action took effect. The real bhavcopy
+    leaves its previous-close field unadjusted, so the adjustment comes from
+    the following evidence, in this order of preference:
+
+    1. the corporate-action text (split, bonus, rights), accepted if - for a
+       large factor - it brings the day's return closer to zero;
+    2. the exchange's daily share-count file (from 2024): the issue size
+       multiplied by 5 on a day the price fell to a fifth is a 1-for-5 split;
+    3. a change of ISIN (which a face-value change always brings) on a day
+       the price moved by a standard split ratio;
+    4. the exchange's previous-close field, but only where it agrees with the
+       text, or shows a standard ratio and leaves an ordinary day's return.
+       Left alone it is not trusted: after a relisting it holds a notional
+       base price, and in the call-auction segment a stale one.
+
+    A day on which a stock resumes trading after more than
+    ``cfg.resume_gap_days`` gets no return at all: the price change across a
+    long halt is neither measurable nor something a holder could act on.
+    Every row that is not a plain close-to-close move is labelled.
+    """
     tol = cfg.price_ratio_tolerance
+    n = len(df)
     close = df["close"].to_numpy(float)
     pc = df["prevclose"].to_numpy(float)
     cp = df["close_prev"].to_numpy(float)  # this company's previous traded close
     fv = df["face_value"].to_numpy(float)
     first = ~np.isfinite(cp)
 
-    with np.errstate(divide="ignore", invalid="ignore"):
-        g = np.where((cp > 0) & (pc > 0), pc / cp, np.nan)  # factor implied by the exchange
-    g_ok = np.isfinite(g) & (g > 0.01) & (g < 100)
+    def column(name: str, default) -> np.ndarray:
+        return df[name].to_numpy() if name in df.columns else np.full(n, default)
 
-    # --- factor implied by the corporate-action text -------------------------
+    gap_days = (pd.to_datetime(column("date", pd.NaT)) - pd.to_datetime(column("date_prev", pd.NaT))).days.to_numpy(float) \
+        if "date" in df.columns and "date_prev" in df.columns else np.full(n, 1.0)
+    resumed = gap_days > cfg.resume_gap_days
+
+    with np.errstate(divide="ignore", invalid="ignore"):
+        g = np.where((cp > 0) & (pc > 0), pc / cp, np.nan)  # factor implied by the exchange's previous close
+        r_raw = close / cp - 1.0
+    g_ok = np.isfinite(g) & (g > 0.001) & (g < 1000)
+
+    # --- 1. the corporate-action text ---------------------------------------------
+    moved = _shift_misdated_actions(df) if "sid" in df.columns else np.zeros(n, bool)
     f_text = df["split_factor"].fillna(1.0).to_numpy(float) * df["bonus_factor"].fillna(1.0).to_numpy(float)
     inferred = _infer_cut_off_ratios(df, f_text, close, cp)
     r_new = df["rights_new"].fillna(0.0).to_numpy(float)
@@ -233,6 +328,36 @@ def _compute_returns(df: pd.DataFrame, cfg: DataConfig) -> pd.DataFrame:
     rights_unpriced = (r_new > 0) & ~np.isfinite(issue_price)
     f_ca = f_text * f_rights
     has_ca = np.abs(f_ca - 1.0) > 1e-9
+    with np.errstate(divide="ignore", invalid="ignore"):
+        r_ca = close / (cp * f_ca) - 1.0
+    # A large factor (split, bonus) must make the day's jump smaller, otherwise the text is
+    # suspect (wrong ex-date, postponed action). A small factor (rights) cannot be judged
+    # that way - an ordinary price move can outweigh it - so the text is trusted.
+    small_factor = np.abs(f_ca - 1.0) < SMALL_FACTOR
+    ca_sane = has_ca & (small_factor | (np.abs(r_ca) < np.abs(r_raw)))
+
+    # --- 2. the exchange's daily share-count file -----------------------------------
+    shares = column("shares", np.nan).astype(float)
+    shares_prev = column("shares_prev", np.nan).astype(float)
+    # Shares outstanding also change for reasons that leave the price alone (employee options, a
+    # placement, a merger). Only a change by a standard split or bonus ratio, on a day the price
+    # moved the same way and ended close to "previous close x ratio", is read as a corporate action.
+    with np.errstate(divide="ignore", invalid="ignore"):
+        q = np.where((shares > 0) & (shares_prev > 0), shares_prev / shares, np.nan)
+        use_shares = (~ca_sane & ~resumed & np.isfinite(q) & _near_standard(q, 0.01)
+                      & (np.abs(r_raw) >= SMALL_FACTOR) & (np.sign(r_raw) == np.sign(q - 1.0))
+                      & (np.abs(close / (cp * q) - 1.0) <= INFER_MAX_RESIDUAL))
+
+    # --- 3. a change of ISIN with a standard split ratio in the price ------------------
+    isin, isin_prev = column("isin", ""), column("isin_prev", "")
+    isin_changed = (isin != isin_prev) & (isin != "") & (isin_prev != "") & ~pd.isna(isin_prev)
+    f_isin = np.ones(n)
+    for i in np.where(isin_changed & ~ca_sane & ~use_shares & ~resumed & (np.abs(r_raw) >= 0.3))[0]:
+        residual = np.abs(close[i] / (cp[i] * _FACE_VALUE_RATIOS) - 1.0)
+        best = int(np.argmin(residual))
+        if residual[best] <= INFER_MAX_RESIDUAL:
+            f_isin[i] = _FACE_VALUE_RATIOS[best]
+    use_isin = np.abs(f_isin - 1.0) > 1e-9
 
     # --- dividend in rupees ----------------------------------------------------
     div = df["dividend"].fillna(0.0).to_numpy(float)
@@ -240,23 +365,24 @@ def _compute_returns(df: pd.DataFrame, cfg: DataConfig) -> pd.DataFrame:
     div = div + np.where(np.isfinite(fv), div_pct / 100.0 * fv, 0.0)
     pct_without_fv = (div_pct > 0) & ~np.isfinite(fv)
 
-    # --- choose the base price for the day's return -----------------------------
+    # --- 4. the exchange's previous close -------------------------------------------------
     exch_adj = g_ok & (np.abs(g - 1.0) > tol)
     with np.errstate(divide="ignore", invalid="ignore"):
         div_like = exch_adj & (div > 0) & (np.abs(g - (1.0 - div / cp)) <= max(tol, 0.003))
-        r_raw = close / cp - 1.0
-        r_ca = close / (cp * f_ca) - 1.0
-    use_exch = exch_adj & ~div_like
-    # A large factor (split, bonus) must make the day's jump smaller, otherwise the text is
-    # suspect (wrong ex-date, postponed action). A small factor (rights) cannot be judged
-    # that way - an ordinary price move can outweigh it - so the exchange text is trusted.
-    small_factor = np.abs(f_ca - 1.0) < 0.15
-    ca_sane = has_ca & (small_factor | (np.abs(r_ca) < np.abs(r_raw)))
-    use_ca = ~exch_adj & ca_sane
+        agree = np.abs(g / f_ca - 1.0) <= 0.03
+        plausible_alone = (~resumed & _near_standard(g) & (np.abs(close / pc - 1.0) <= 0.25)
+                           & (np.minimum(cp, pc) >= MIN_PRICE_FOR_EXCHANGE_BASE))
+    use_exch = exch_adj & ~div_like & ((has_ca & agree) | (~ca_sane & ~use_shares & ~use_isin & plausible_alone))
+    use_ca = ca_sane & ~use_exch
+    use_shares &= ~use_exch
+    use_isin &= ~use_exch
 
     base = cp.copy()
-    base[use_exch] = pc[use_exch]
     base[use_ca] = cp[use_ca] * f_ca[use_ca]
+    base[use_shares] = cp[use_shares] * q[use_shares]
+    base[use_isin] = cp[use_isin] * f_isin[use_isin]
+    base[use_exch] = pc[use_exch]
+    base[div_like] = pc[div_like]
     with np.errstate(divide="ignore", invalid="ignore"):
         ret_price = close / base - 1.0
         # A very large dividend is real often enough (special dividends of half the share price and
@@ -268,32 +394,33 @@ def _compute_returns(df: pd.DataFrame, cfg: DataConfig) -> pd.DataFrame:
         div = np.where(div_rejected, 0.0, div)
         div_used = div if cfg.include_dividends else np.zeros_like(div)
         ret_total = (close + div_used) / base - 1.0
+    adjusted = use_ca | use_shares | use_isin | use_exch | div_like
 
     # --- demergers: the price drop is a distribution, not a loss -----------------
     special = df["demerger"].eq(True).to_numpy() | df["capital_change"].eq(True).to_numpy()
-    neutral = np.zeros(len(df), bool)
+    neutral = np.zeros(n, bool)
     if cfg.demerger_treatment == "neutralise":
-        neutral = special & ~exch_adj & ~has_ca & (r_raw < -0.10)
+        neutral = special & ~adjusted & (r_raw < -0.10)
         ret_price[neutral] = 0.0
         ret_total[neutral] = 0.0
 
-    ret_price[first] = np.nan  # listing day: the "previous close" is the issue price
-    ret_total[first] = np.nan
+    ret_price[first | resumed] = np.nan  # listing day, or the first day back after a long halt
+    ret_total[first | resumed] = np.nan
 
     # --- label every non-trivial case for the audit log -------------------------
-    with np.errstate(divide="ignore", invalid="ignore"):
-        agree = np.abs(g / f_ca - 1.0) <= 0.03
-    source = np.full(len(df), "", dtype=object)
-    source[use_exch & has_ca & agree] = "exchange+ca_text"
-    source[use_exch & has_ca & ~agree] = "exchange_vs_ca_text_mismatch"
-    source[use_exch & ~has_ca] = "exchange_only"
+    source = np.full(n, "", dtype=object)
     source[use_ca] = "ca_text_only"
+    source[use_ca & moved] = "ca_text_date_shifted"
     source[use_ca & fv_assumed] = "ca_text_rights_face_value_unknown"
     source[use_ca & inferred] = "ca_ratio_inferred"
-    source[has_ca & ~exch_adj & ~ca_sane] = "ca_text_rejected"
+    source[use_shares] = "daily_file_shares"
+    source[use_isin] = "isin_change_split"
+    source[use_exch & has_ca] = "exchange+ca_text"
+    source[use_exch & ~has_ca] = "exchange_only"
+    source[has_ca & ~ca_sane & ~adjusted] = "ca_text_rejected"
     source[div_like] = "exchange_dividend_adjusted"
     source[neutral] = "demerger_neutralised"
-    source[rights_unpriced & ~exch_adj] = "rights_not_adjusted"
+    source[rights_unpriced & ~adjusted] = "rights_not_adjusted"
     source[(source == "") & div_rejected] = "large_dividend_rejected"
     source[(source == "") & large & ~div_rejected] = "large_dividend"
     # A move of a few ticks on a share priced under a rupee is a large percentage but needs no
@@ -301,16 +428,17 @@ def _compute_returns(df: pd.DataFrame, cfg: DataConfig) -> pd.DataFrame:
     unexplained = ((source == "") & ~first & (np.abs(ret_price) > 0.25)
                    & (np.abs(close - base) > JUMP_MIN_TICKS * TICK + 1e-9))
     source[unexplained] = "unexplained_jump"
+    source[resumed] = "resumed_after_long_halt"
     source[first] = ""
     df["dividend_pct_without_face_value"] = pct_without_fv
 
     df["dividend"] = div
-    df["adj_factor"] = np.where(first, 1.0, base / np.where(cp > 0, cp, np.nan))
+    df["adj_factor"] = np.where(first | resumed, 1.0, base / np.where(cp > 0, cp, np.nan))
     df["adj_source"] = source
     df["ret_price"] = ret_price
     df["ret_total"] = ret_total
     df["exchange_factor"] = g
-    df["ca_factor"] = f_ca
+    df["ca_factor"] = np.where(use_shares, q, np.where(use_isin, f_isin, f_ca))
     df["ret_raw"] = r_raw
     return df
 
@@ -451,6 +579,8 @@ def build_panel(cfg: DataConfig, verbose: bool = True) -> Dict[str, Path]:
     by_sid = df.groupby("sid", sort=False)
     df["close_prev"] = by_sid["close"].shift(1)
     df["date_prev"] = by_sid["date"].shift(1)
+    df["shares_prev"] = by_sid["shares"].shift(1)
+    df["isin_prev"] = by_sid["isin"].shift(1)
     df["face_value"] = _face_values(df, cfg, stats)
     df = _compute_returns(df, cfg)
     stats["dividend_events_without_an_amount"] = int(df["dividend_unstated"].eq(True).sum())
