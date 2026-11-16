@@ -63,16 +63,16 @@ def build_fixture(name: str, spec: FixtureSpec) -> Path:
 
 @pytest.fixture(scope="session")
 def fixture_root() -> Path:
-    """Main fixture: 320 companies, 2021-2025, exchange-adjusted previous close."""
+    """Main fixture: 320 companies, 2021-2025, previous close left unadjusted on ex-dates (as in the real files)."""
     return build_fixture("main", FixtureSpec())
 
 
 @pytest.fixture(scope="session")
-def unadjusted_root() -> Path:
-    """Small fixture in which the exchange does NOT adjust the previous close on ex-dates."""
+def adjusted_root() -> Path:
+    """Small fixture in which the exchange DOES put the adjusted base price in the previous close."""
     spec = FixtureSpec(start=dt.date(2023, 3, 1), end=dt.date(2024, 12, 31), n_companies=90, seed=11,
-                       prevclose_adjusted=False)
-    return build_fixture("unadjusted", spec)
+                       prevclose_adjusted=True)
+    return build_fixture("adjusted", spec)
 
 
 # A small fixture laid out like the real archive: no ISIN column in the oldest price files, a first

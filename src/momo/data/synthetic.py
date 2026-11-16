@@ -78,9 +78,10 @@ class FixtureSpec:
     end: dt.date = dt.date(2025, 6, 30)  # spans the legacy -> UDiFF switch (8 July 2024)
     n_companies: int = 320
     seed: int = 7
-    # How the "exchange" fills PREVCLOSE on an ex-date. Real NSE files are believed to
-    # carry the adjusted base price; the pipeline is tested under both conventions.
-    prevclose_adjusted: bool = True
+    # How the "exchange" fills PREVCLOSE on an ex-date. The real NSE bhavcopy leaves it unadjusted
+    # (checked on the 2010-2026 files), so that is the default; the pipeline is also tested on the
+    # other convention, in case a file ever carries the adjusted base price.
+    prevclose_adjusted: bool = False
     momentum_strength: float = 1.0  # 0 = no momentum effect in the simulated returns
     crash_start: Optional[dt.date] = dt.date(2022, 2, 21)  # a sharp market fall, for stress-test code
     layout: str = "raw"  # "raw": data/raw layout; "server": URL layout (to test the downloader)
@@ -401,24 +402,84 @@ def generate_fixture(root: Path, spec: Optional[FixtureSpec] = None) -> FixtureT
                 purpose = rng.choice(["DEMERGER", "SCHEME OF ARRANGEMENT"])
                 rec["factor"] = 1 - e["spin"]
             kind[i] = e["kind"] if e["kind"] in ("demerger",) else ""
-            rows_act.append(rec)
-            # Listed daily from announcement to the ex-date; one bonus is first mis-stated then corrected.
+            # --- how the exchange lists the event day by day (patterns taken from the real archive) ---
             announce = max(0, t - int(rng.integers(8, 18)))
-            wrong = e["kind"] == "bonus" and rng.random() < 0.3
-            for s in range(announce, t + 1):
-                text = purpose
-                if wrong and s < t - 4:
-                    text = f"BONUS {e['a'] + 1}:{e['b']}"
-                listings.append({"seen": s, "series": "EQ", "symbol": symbol_on(i, s), "ex": day,
-                                 "purpose": text, "security": f"SYNTHETIC COMPANY {i:04d}"})
+            style = rng.random()
+            end = t  # last day the text is listed: the ex-date, or later for a dividend (book closure)
+            texts = []  # (first day, last day, text)
+            if e["kind"] == "dividend":
+                end = min(T - 1, t + int(rng.integers(0, 6)))
+                if style < 0.15 and t - announce >= 4:
+                    # a correction: the first text is withdrawn and the right amount appears the next day
+                    texts = [(announce, t - 2, f"DIV-RS {amount * 1.5:g} PER SHARE"), (t - 1, end, purpose)]
+                elif style < 0.25:
+                    # the same dividend listed twice side by side in slightly different words
+                    texts = [(announce, end, f"DIV-RS {amount:g} PER SH"), (announce + 1, t, f"AGM/DIV-RS {amount:g} PER SHARE")]
+                elif style < 0.33 and not e["as_pct"]:
+                    # a second, special dividend on the same ex-date, listed as a row of its own
+                    extra = max(0.05, round(0.4 * amount, 2))
+                    div[i] += extra
+                    rec["dividend"] = div[i]
+                    texts = [(announce, end, purpose), (announce, end, f"SPL DIV - RS {extra:g} PER SH")]
+                elif style < 0.36 and not e["as_pct"]:
+                    # a very large special dividend (the price falls by about that much on the ex-date)
+                    big = round(0.35 * pc_i, 2)
+                    div[i] = big
+                    rec["dividend"] = big
+                    texts = [(announce, end, f"SPLDIV - RS {big:g} PER SH")]
+                elif style < 0.46:
+                    texts = [(announce, end, rng.choice([f"INTDIV-RS{amount:g}", f"INT DIV-RE.{amount:g}/- PER SHARE",
+                                                         f"AGM/DIVRS {amount:g} PER SHARE"])
+                              if amount >= 1 else purpose)]
+                else:
+                    texts = [(announce, end, purpose)]
+            elif e["kind"] == "bonus":
+                if style < 0.3 and t - announce >= 6:
+                    texts = [(announce, t - 5, f"BONUS {e['a'] + 1}:{e['b']}"), (t - 4, t, purpose)]  # mis-stated, then corrected
+                elif style < 0.45:
+                    texts = [(announce, t, "AGM/BONUS")]  # the ratio did not fit in the field
+                elif style < 0.6:
+                    texts = [(announce, t, f"BON{e['a']}:{e['b']}")]
+                else:
+                    texts = [(announce, t, purpose)]
+                if rng.random() < 0.3:
+                    # a dividend goes ex the same day: a row of its own, listed until after the ex-date
+                    together = max(0.05, round(0.004 * pc_i, 2))
+                    div[i] = together
+                    rec["dividend"] = together
+                    texts.append((announce, min(T - 1, t + 4), f"AGM/DIV-RS {together:g} PER SHARE"))
+            elif e["kind"] == "split":
+                if style < 0.15:
+                    texts = [(announce, t, f"FV SPLIT FROM RS{old_fv:g} TO RS")]  # cut off before the new value
+                elif style < 0.6:
+                    texts = [(announce, t, rng.choice([f"FV SPLT FRM RS {old_fv:g} TO {unit(fv[i])}",
+                                                       f"FVSPLTFRM RS{old_fv:g}TO{unit(fv[i]).replace(' ', '.')}",
+                                                       f"SUB DIV FRM RS {old_fv:g} TO RS {fv[i]:g}"]))]
+                else:
+                    texts = [(announce, t, purpose)]
+            elif e["kind"] == "rights":
+                texts = [(announce, t, rng.choice([purpose, f"RIGHTS {e['a']}:{e['b']}@PRM RS {premium:g}",
+                                                   f"RHTS {e['a']}:{e['b']} @PREM RS.{premium:g}/-"])
+                          if premium > 0 else f"RIGHTS {e['a']}:{e['b']} AT PAR")]
+            else:
+                texts = [(announce, t, purpose)]
+            rows_act.append(rec)
+            both_series = rng.random() < 0.3  # the real file repeats many rows under the BE series
+            for first_day_listed, last_day_listed, text in texts:
+                for s in range(max(0, first_day_listed), last_day_listed + 1):
+                    for series_code in (("EQ", "BE") if both_series else ("EQ",)):
+                        listings.append({"seen": s, "series": series_code, "symbol": symbol_on(i, s), "ex": day,
+                                         "purpose": text, "security": f"SYNTHETIC COMPANY {i:04d}"})
 
         base = prev_close * f
         with np.errstate(invalid="ignore", divide="ignore"):
             r_px = r_tot - div / base - spin
             gap = np.where(resume, rng.uniform(-0.45, 0.2, N), 0.0)  # suspended stocks reopen with a gap
             target = base * (1 + r_px + gap)
-            up = np.floor(base * (1 + band) / 0.05 + 1e-9) * 0.05
-            dn = np.ceil(base * (1 - band) / 0.05 - 1e-9) * 0.05
+            # for an extraordinary dividend the exchange resets the base price of the band to ex-dividend
+            band_ref = np.where(div / base > 0.05, base - div, base)
+            up = np.floor(band_ref * (1 + band) / 0.05 + 1e-9) * 0.05
+            dn = np.ceil(band_ref * (1 - band) / 0.05 - 1e-9) * 0.05
         banded = trade & ~first_day & ~resume & (spin == 0)
         close = _tick(target)
         lock = np.zeros(N, int)
@@ -524,6 +585,13 @@ def generate_fixture(root: Path, spec: Optional[FixtureSpec] = None) -> FixtureT
     # the real file starts with a header row; the parser recognises and skips it
     sc.to_csv(static_dir / "symbolchange.csv", index=False,
               header=["SYMB_COMPANY_NAME", " SM_KEY_SYMBOL", " SM_NEW_SYMBOL", " SM_APPLICABLE_FROM"])
+
+    listed_at_end = [i for i in range(N) if list_idx[i] < T and delist_idx[i] > T]
+    with open(static_dir / "EQUITY_L.csv", "w") as fh:
+        fh.write("SYMBOL,NAME OF COMPANY, SERIES, DATE OF LISTING, PAID UP VALUE, MARKET LOT, ISIN NUMBER, FACE VALUE\n")
+        for i in listed_at_end:
+            listed = f"{days[min(list_idx[i], T - 1)]:%d-%b-%Y}".upper()
+            fh.write(f"{symbol[i]},Synthetic Company {i:04d} Limited,EQ,{listed},{fv[i]:g},1,{_isin(i, serial[i])},{fv[i]:g}\n")
 
     ext = root / "external"
     ext.mkdir(exist_ok=True)

@@ -32,35 +32,63 @@ import numpy as np
 import pandas as pd
 
 # --- text normalisation ------------------------------------------------------
-_CURRENCY = re.compile(r"(?:\bRS|\bRE|\bINR|₹)\.?(?=\s*\d)")
-_SEGMENT_SPLIT = re.compile(r"\+|&|/|;|\bAND\b|\bALONG WITH\b")
-_NUM = r"(\d+(?:\.\d+)?)"
+# The purpose field of the exchange file is short (about 25 characters), so its texts are heavily
+# abbreviated, run words together and are sometimes cut off:
+#     BON1:1/FV SPL RS.10TORE.1      FVSPLTFRM RS 10 TO RE 1      DIV-RS 2/FV-SPTLRS10TORS2
+#     AGM/DIV-FIN RS3+INT RS120      INTDIV-RS5SPLDIV-RS10        FV SPLIT FROM RS10 TO RS
+# Every pattern below was written against the texts found in the real files of 2010-2026.
+_NUM = r"(\d+(?:\.\d+)?|\.\d+)"
+_GLUE = r"(?:(?<![A-Z])|(?<=DIV)|(?<=DV)|(?<=SPTL)|(?<=SPLT)|(?<=SPLIT)|(?<=SPL)|(?<=FRM)|(?<=FROM)|(?<=FIN)|(?<=INT)|(?<=PRM)|(?<=PREM)|(?<=PREMIUM)|(?<=PAR))"
+_CURRENCY = re.compile(_GLUE + r"(?:RS|RE|INR)\.?\s*-?\s*(?=\.?\d)|₹\s*")  # also "RS - 20"
+_TO_NUMBER = re.compile(r"(?<=\d)\s*TO\s*(?:RS|RE)?\.?\s*(?=\.?\d)")  # "RS10TORE1" -> "RS10 TO 1"
+_TO_NOTHING = re.compile(r"(?<=\d)\s*TO\s*(?:RS|RE)\b\.?(?!\s*\d)")   # cut off: "FROM RS10 TO RS"
+_ORDINAL = re.compile(r"\b\d+\s*(?:ST|ND|RD|TH)\b")                   # "2ND INTERIM DIVIDEND"
 
-_BONUS = re.compile(r"\bBON(?:US)?\b[^0-9:]{0,30}(\d+)\s*:\s*(\d+)")
-_SPLIT = re.compile(r"(?:SPLIT|SPLT|SUB\s*-?\s*DIVISION)[^0-9]*?" + _NUM + r"[^0-9.]+?" + _NUM + r"(\s*(?:PAISE|PAISA))?")
-_CONSOL = re.compile(r"CONSOLIDATION[^0-9]*?" + _NUM + r"[^0-9.]+?" + _NUM)
-_RIGHTS = re.compile(r"\bRIGHTS?\b[^0-9:]{0,30}(\d+)\s*:\s*(\d+)")
-_PREMIUM = re.compile(r"PREM(?:IUM)?[^0-9]{0,20}" + _NUM)
+_BONUS = re.compile(r"(?<![A-Z])BON(?:US|S)?(?![A-Z])\s*(?:ISSUE|SHARES?)?\s*[-@:]?\s*(\d+)\s*:\s*(\d+)")
+_BONUS_WORD = re.compile(r"(?<![A-Z])BON(?:US|S)?(?![A-Z])")
+_BONUS_NOT_SHARES = re.compile(r"BON\w*\s*[-:]?\s*(?:DEB|NCD|PREF|NCRPS)|\bDVR\b|\bDEB\b")  # bonus debentures, DVRs
+_SPLIT_WORD = r"(?:SPL(?:IT|T)?|SPTL?|FVS|SUB\s*-?\s*DIV(?:ISION)?|SUBDIVISION)"
+# keyword, a little filler ("(SUB-DIVISION) - FROM RS"), the old value, "TO", the new value (may be cut off)
+_SPLIT = re.compile(_SPLIT_WORD + r"[^0-9|]{0,34}?" + _NUM + r"\s*(PAISE|PAISA|PS)?\s*(?:(?:PER|PR)\s*SH\w*|EACH)?\s*TO\s*"
+                    r"(?:RS)?\s*" + _NUM + r"?\s*(PAISE|PAISA|PS)?")
+_CONSOL = re.compile(r"CONSOL\w*[^0-9|]{0,34}?" + _NUM + r"\s*(?:(?:PER|PR)\s*SH\w*|EACH)?\s*TO\s*(?:RS)?\s*" + _NUM)
+_RIGHTS_WORD = r"(?<![A-Z])(?:RIGHTS?|RHTS?|RGHTS?|RGTS?|RH)(?![A-Z])"
+_RIGHTS = re.compile(_RIGHTS_WORD + r"[\s@:\-]*(?:EQ)?\s*(\d+)\s*:\s*(\d+)")
+_RIGHTS_ANY = re.compile(_RIGHTS_WORD)
+_RIGHTS_OTHER = re.compile(r"CCD|NCD|WRNT|WARRANT|PARTLY|\bDEB\b|\dW\b")  # rights to something other than plain shares
+_PREMIUM = re.compile(r"(?<![A-Z])P(?:R|E)[A-Z]{0,5}M(?![A-Z])[\s@]*(?:RS)?\s*" + _NUM)  # PRM, PREM, PREMIUM, PREUM ...
 _AT_PAR = re.compile(r"(?:@|\bAT)\s*PAR\b")
-# "DIV", "DIVIDEND", "INTDIV" - but not the DIVISION in "SUB-DIVISION" (a split).
-_DIV_WORD = re.compile(r"DIV(?!ISION)")
-_DIV_QUALIFIER = re.compile(r"\b(?:SPECIAL|SPL|INTERIM|INT|FINAL|FIN)\b")
+# "DIV", "DIVIDEND", "INTDIV", "SPLDIV", "DV" - but not the DIV of "SUB DIV(ISION)" (a split).
+_DIV_WORD = re.compile(r"(?<!SUB)(?<!SUB )(?<!SUB-)DIV(?!ISION)|(?<![A-Z])DV(?![A-Z])")
 _AMOUNT_RS = re.compile(r"\bRS\s*" + _NUM)
 _AMOUNT_PAISE = re.compile(_NUM + r"\s*(?:PAISE|PAISA)\b")
 _AMOUNT_PCT = re.compile(_NUM + r"\s*%")
+_AMOUNT_BARE = re.compile(r"(?:DIV(?:IDEND|D)?|DV|FIN(?:AL)?|INT(?:ERIM|RM)?|SPL|SPECIAL)\s*[-:]?\s*" + _NUM + r"(?!\s*[:%\d])")
 _DEMERGER = re.compile(r"DE\s*-?\s*MERGER|SPIN\s*-?\s*OFF|HIVE\s*-?\s*OFF")
-_CAPITAL = re.compile(r"SCHEME OF ARR|CAPITAL REDUCTION|REDUCTION (?:OF|IN) (?:SHARE )?CAPITAL|AMALGAMATION")
-_NOT_DIVIDEND = re.compile(r"BONUS|SPLIT|SPLT|RIGHTS?|CONSOLIDATION|BUY\s*-?\s*BACK|DEMERGER")
+_CAPITAL = re.compile(r"\bSCH\w*\.?\s+(?:OF\s+)?A\w+|ARRANGEMENT|ARRGMNT|CAP(?:ITAL)?\.?\s*RED|"
+                      r"REDUCTION\W+(?:(?:OF|IN)\W+)?(?:SHARE )?CAP|AMALG|(?<!DE)(?<!DE-)MERGER")
+# A dividend written without the word: "FIN RS 18+SPL RS 25", "INT RS 5 PER SHARE", "INT IDV RS 1 PER SHARE".
+_DIV_IMPLIED = re.compile(r"^(?:\W*(?:FIN(?:AL)?|INT(?:ERIM)?|SPL|SPECIAL|IDV)\W*)+RS " + _NUM
+                          + r"(?:\W*(?:PER|PR|P)\W*SH\w*)?(?:\W+(?:FIN(?:AL)?|INT(?:ERIM)?|SPL|SPECIAL)\W*RS "
+                          + _NUM + r"(?:\W*(?:PER|PR|P)\W*SH\w*)?)*\W*$")
 # Purposes that are real but have no effect on the share price series.
 _NO_PRICE_EFFECT = re.compile(
-    r"\bAGM\b|\bEGM\b|ANNUAL GENERAL|EXTRA.?ORDINARY GENERAL|BUY\s*-?\s*BACK|INTEREST|REDEMPTION|"
-    r"\bCOURT CONVENED\b|POSTAL BALLOT|\bMEETING\b"
+    r"\bAGM\b|\bEGM\b|\bEOGM\b|ANNUAL GENERAL|EXTRA.?ORDINARY GENERAL|GENERAL MEETING|BUY\s*-?\s*BACK|INTEREST|"
+    r"REDEMP|\bCOURT CONVENED\b|POSTAL BALLOT|\bMEETING\b|CLOSURE|CLOSING|E\s*-?\s*VOTING|\bDISTRIBUTION\b|"
+    r"ELECTION|PURPOSE|\bEXIT\b|DELIST|CONV TO"
 )
 
 
 def normalise_purpose(text: str) -> str:
-    """Upper-case, strip '/-' decorations and unify currency markers to 'RS'."""
+    """Upper-case, drop '/-' decorations and ordinals, and give the run-together forms their spaces.
+
+    ``RS.10TORE.1`` -> ``RS 10 TO 1``; ``DIVRS10`` -> ``DIV RS 10``; a currency
+    marker is always written ``RS`` followed by a space.
+    """
     t = str(text).upper().replace("/-", " ")
+    t = _ORDINAL.sub(" ", t)
+    t = _TO_NUMBER.sub(" TO ", t)
+    t = _TO_NOTHING.sub(" TO ", t)
     t = _CURRENCY.sub(" RS ", t)
     return re.sub(r"\s+", " ", t).strip()
 
@@ -77,6 +105,13 @@ class ParsedAction:
     demerger: bool = False
     capital_change: bool = False
     recognised: bool = False  # False = the text was not understood at all
+    # A split or bonus is announced but its ratio is missing (the text was cut off). panel.py then
+    # recovers the ratio from the price on the ex-date, and logs that it did.
+    split_unknown: bool = False
+    bonus_unknown: bool = False
+    old_face_value: float = np.nan  # face values named in a split text, when both or the old one are given
+    new_face_value: float = np.nan
+    dividend_unstated: bool = False  # a dividend with no amount in the text ("INTERIM DIVIDEND")
 
 
 @lru_cache(maxsize=200_000)
@@ -86,61 +121,76 @@ def parse_purpose(text: str) -> ParsedAction:
     split_factor = bonus_factor = 1.0
     dividend = dividend_pct = 0.0
     rights_new = rights_held = 0.0
-    rights_premium = np.nan
-    recognised = False
+    rights_premium = old_fv = new_fv = np.nan
+    recognised = split_unknown = bonus_unknown = dividend_unstated = False
+    rest = t  # what is left for the dividend reader once the other events are cut out
 
+    # --- bonus -----------------------------------------------------------------
+    not_shares = bool(_BONUS_NOT_SHARES.search(t))
     m = _BONUS.search(t)
-    if m:
+    if m and not not_shares:
         a, b = float(m.group(1)), float(m.group(2))
         if 0 < a <= 100 and 0 < b <= 100:
             bonus_factor = b / (a + b)
             recognised = True
-
-    m = _SPLIT.search(t)
-    if m:
-        old, new = float(m.group(1)), float(m.group(2))
-        if m.group(3):  # "... TO 50 PAISE"
-            new /= 100.0
-        if old > 0 and new > 0 and old != new:
-            split_factor *= new / old
-            recognised = True
-
-    m = _CONSOL.search(t)
-    if m and "SPLIT" not in t:
-        old, new = float(m.group(1)), float(m.group(2))
-        if old > 0 and new > 0 and old != new:
-            split_factor *= new / old
-            recognised = True
-
-    m = _RIGHTS.search(t)
-    if m:
-        rights_new, rights_held = float(m.group(1)), float(m.group(2))
-        p = _PREMIUM.search(t)
-        if p:
-            rights_premium = float(p.group(1))
-        elif _AT_PAR.search(t):
-            rights_premium = 0.0
+        rest = rest.replace(m.group(0), " | ")
+    elif _BONUS_WORD.search(t):
         recognised = True
+        bonus_unknown = not not_shares  # "AGM/DIV-RS 29.50/BONUS": the ratio did not fit in the field
 
-    if _DIV_WORD.search(t):
-        previous_was_dividend = False
-        for seg in _SEGMENT_SPLIT.split(t):
-            has_word = bool(_DIV_WORD.search(seg))
-            continues = previous_was_dividend and bool(_DIV_QUALIFIER.search(seg)) and not _NOT_DIVIDEND.search(seg)
-            if not (has_word or continues):
-                previous_was_dividend = False
-                continue
-            previous_was_dividend = True
-            rs = _AMOUNT_RS.search(seg)
-            paise = _AMOUNT_PAISE.search(seg)
-            pct = _AMOUNT_PCT.search(seg)
-            if rs:
-                dividend += float(rs.group(1))
-            elif paise:
-                dividend += float(paise.group(1)) / 100.0
-            elif pct:
-                dividend_pct += float(pct.group(1))
-        recognised = True  # a dividend with no stated amount is still a known event type
+    # --- face-value split / consolidation -------------------------------------------
+    m = _SPLIT.search(t)
+    c = None if m else _CONSOL.search(t)
+    if m:
+        old = float(m.group(1)) / (100.0 if m.group(2) else 1.0)
+        recognised = True
+        if m.group(3):
+            new = float(m.group(3)) / (100.0 if m.group(4) else 1.0)
+            if old > 0 and new > 0 and old != new and 0.001 <= new / old <= 1000:
+                split_factor, old_fv, new_fv = new / old, old, new
+        else:
+            split_unknown, old_fv = True, old  # "FV SPLIT FROM RS10 TO RS": cut off before the new value
+        rest = rest.replace(m.group(0), " | ")
+    elif c:
+        old, new = float(c.group(1)), float(c.group(2))
+        if old > 0 and new > 0 and old != new and 0.001 <= new / old <= 1000:
+            split_factor, old_fv, new_fv = new / old, old, new
+            recognised = True
+        rest = rest.replace(c.group(0), " | ")
+
+    # --- rights --------------------------------------------------------------------
+    if _RIGHTS_ANY.search(t):
+        recognised = True
+        m = _RIGHTS.search(t)
+        if m and not _RIGHTS_OTHER.search(t):
+            rights_new, rights_held = float(m.group(1)), float(m.group(2))
+            prem = _PREMIUM.search(t)
+            if prem:
+                rights_premium = float(prem.group(1))
+                rest = rest.replace(prem.group(0), " | ")
+            elif _AT_PAR.search(t):
+                rights_premium = 0.0
+                rest = _AT_PAR.sub(" | ", rest)
+            rest = rest.replace(m.group(0), " | ")
+        else:
+            rest = _RIGHTS_ANY.sub(" | ", rest)
+
+    # --- dividends: every amount in what is left belongs to a dividend ---------------------
+    if _DIV_WORD.search(rest) or _DIV_IMPLIED.match(rest):
+        recognised = True
+        # Amounts are written "RS 5" or bare after the word ("DIV-2.5", "FIN 7.5+SPL 7.5"); one text
+        # can mix both ("DIV-RS 12.50+SPL 0.50"), so the two kinds are added up.
+        amounts = [float(x) for x in _AMOUNT_RS.findall(rest)] + [float(x) for x in _AMOUNT_BARE.findall(rest)]
+        paise = [float(x) for x in _AMOUNT_PAISE.findall(rest)]
+        pct = [float(x) for x in _AMOUNT_PCT.findall(rest)]
+        if paise:
+            dividend = sum(paise) / 100.0
+        elif pct:
+            dividend_pct = sum(pct)
+        elif amounts:
+            dividend = sum(amounts)
+        else:
+            dividend_unstated = True
 
     demerger = bool(_DEMERGER.search(t))
     capital_change = bool(_CAPITAL.search(t))
@@ -158,29 +208,59 @@ def parse_purpose(text: str) -> ParsedAction:
         demerger=demerger,
         capital_change=capital_change,
         recognised=recognised,
+        split_unknown=split_unknown,
+        bonus_unknown=bonus_unknown,
+        old_face_value=old_fv,
+        new_face_value=new_fv,
+        dividend_unstated=dividend_unstated,
     )
 
 
 ACTION_COLUMNS = [
     "symbol", "ex_date", "split_factor", "bonus_factor", "dividend", "dividend_pct_fv",
     "rights_new", "rights_held", "rights_premium", "demerger", "capital_change",
+    "split_unknown", "bonus_unknown", "old_face_value", "new_face_value", "dividend_unstated",
     "n_unrecognised", "purposes", "first_seen",
 ]
+WITHDRAWN_DAYS = 10  # a listing that stopped this long before its ex-date was withdrawn or re-dated
+
+_SKELETON_DROP = re.compile(r"ANNUAL GENERAL MEETING|ANN(?:UAL)? BOOK CL\w+|\bAGM\b|\b(?:PER|PR|P) ?SH\w*")
+
+
+def _skeleton(purpose: str) -> str:
+    """The wording of a purpose with its numbers and decorations removed.
+
+    ``AGM/DIV-RS 0.20 PER SH`` and ``DIV-RS 0.20 PER SHARE`` give the same
+    skeleton (``DIVRS#``): they are two listings of one event. ``INT DIV - RS 41``
+    and ``SPL DIV - RS 110`` give different ones: two events.
+    """
+    t = _SKELETON_DROP.sub(" ", normalise_purpose(purpose)).replace("DIVIDEND", "DIV")
+    t = re.sub(_NUM, "#", t)
+    return re.sub(r"[^A-Z#:]", "", t)
 
 
 def build_action_table(
     listings: pd.DataFrame,
     equity_series: Optional[list] = None,
-    tolerance_days: int = 3,
+    tolerance_days: int = WITHDRAWN_DAYS,
 ) -> pd.DataFrame:
     """Collapse corporate-action listings into one row per (symbol, ex-date).
 
-    The exchange lists the same event every day from its announcement until it
-    goes ex, sometimes with corrected wording. To avoid counting an event twice
-    we keep, for each (symbol, ex-date), only the wording that was **still being
-    listed at the end** (its ``last_seen`` is within ``tolerance_days`` of the
-    latest for that event) - the exchange's final word - and then combine the
-    distinct events in it (factors multiply, dividends add).
+    The exchange lists an event every day from its announcement until about
+    its ex-date, and what it lists changes: wording is corrected, an amount is
+    added, a bonus joins a dividend. How the real listings behave (2010-2026):
+
+    * A **correction replaces** the earlier text: the old text stops being
+      listed and the new one starts the next day. So a text is dropped when
+      another text for the same ex-date first appears after it was last seen.
+    * **Separate events** on one ex-date (a bonus and a dividend, an interim
+      and a special dividend) are listed side by side, on overlapping days.
+      They are all kept and combined: factors multiply, dividends add.
+    * The same event is sometimes listed twice side by side in slightly
+      different words. Texts with the same wording once numbers are removed
+      count as one event, and the one listed last is used.
+    * A text that stopped being listed more than ``tolerance_days`` before its
+      ex-date was withdrawn (cancelled, or moved to another ex-date).
 
     ``listings`` needs ``symbol``, ``ex_date``, ``purpose`` and either
     ``first_seen``/``last_seen`` (as written by ``ingest``) or ``seen_date``.
@@ -199,12 +279,19 @@ def build_action_table(
         return pd.DataFrame(columns=ACTION_COLUMNS)
 
     key = ["symbol", "ex_date"]
-    # The same text can come from two yearly files (announced in December, ex in January).
+    # The same text comes under several series (EQ and BE) and can span two yearly files.
     ca = ca.groupby(key + ["purpose"], as_index=False).agg(first_seen=("first_seen", "min"),
                                                           last_seen=("last_seen", "max"))
-    final = ca.groupby(key)["last_seen"].transform("max")
-    keep = ca["last_seen"].isna() | final.isna() | (ca["last_seen"] >= final - pd.Timedelta(days=tolerance_days))
-    ca = ca[keep]
+    withdrawn = ca["last_seen"].notna() & (ca["last_seen"] < ca["ex_date"] - pd.Timedelta(days=tolerance_days))
+    ca = ca[~withdrawn]
+    newest_start = ca.groupby(key)["first_seen"].transform("max")
+    replaced = ca["last_seen"].notna() & newest_start.notna() & (newest_start > ca["last_seen"])
+    ca = ca[~replaced].copy()
+    if ca.empty:
+        return pd.DataFrame(columns=ACTION_COLUMNS)
+    ca["skeleton"] = ca["purpose"].map(_skeleton)
+    ca = (ca.sort_values(key + ["skeleton", "first_seen", "last_seen", "purpose"])
+            .drop_duplicates(key + ["skeleton"], keep="last"))
 
     parsed = pd.DataFrame([asdict(parse_purpose(p)) for p in ca["purpose"]], index=ca.index)
     ca = pd.concat([ca[key + ["purpose", "first_seen"]], parsed], axis=1)
@@ -221,6 +308,11 @@ def build_action_table(
         rights_premium=("rights_premium", "max"),
         demerger=("demerger", "any"),
         capital_change=("capital_change", "any"),
+        split_unknown=("split_unknown", "any"),
+        bonus_unknown=("bonus_unknown", "any"),
+        old_face_value=("old_face_value", "max"),
+        new_face_value=("new_face_value", "min"),
+        dividend_unstated=("dividend_unstated", "any"),
         n_unrecognised=("unrecognised", "sum"),
         purposes=("purpose", lambda s: " || ".join(sorted(set(s)))),
         first_seen=("first_seen", "min"),

@@ -287,8 +287,14 @@ def parse_pr_zip(path: Path, date: dt.date) -> Dict[str, pd.DataFrame]:
             base = member.rsplit("/", 1)[-1].lower()
             for key, (pattern, parser) in _PR_MEMBERS.items():
                 if pattern.match(base):
+                    raw = zf.read(member)
+                    if not raw.strip():
+                        # The exchange occasionally publishes an empty file (e.g. Bc100122.csv). Nothing is
+                        # lost for corporate actions - each is listed on many days - but it is recorded.
+                        errors.append({"date": pd.Timestamp(date), "member": member, "error": "file is empty (0 bytes)"})
+                        continue
                     try:
-                        out[key] = parser(zf.read(member), date)
+                        out[key] = parser(raw, date)
                     except Exception as exc:  # keep going; the quality report shows the gap
                         errors.append({"date": pd.Timestamp(date), "member": member, "error": str(exc)})
     if errors:
@@ -541,6 +547,30 @@ def parse_symbol_changes(path: Path) -> pd.DataFrame:
     df["new_symbol"] = _txt(df["new_symbol"])
     df = df[(df["old_symbol"] != "") & (df["new_symbol"] != "") & (df["old_symbol"] != df["new_symbol"])]
     return to_ns(df[["old_symbol", "new_symbol", "change_date"]].drop_duplicates().reset_index(drop=True))
+
+
+def parse_equity_list(path: Path) -> pd.DataFrame:
+    """``EQUITY_L.csv`` (securities listed today) -> ``symbol``, ``isin``, ``face_value``, ``listing_date``.
+
+    Used for one thing: the face value that goes with an ISIN. A face-value
+    change always brings a new ISIN, so "face value of this ISIN" holds for
+    every day the ISIN traded - no look-ahead is involved.
+    """
+    df = _read_table(_read_bytes(path), ["SYMBOL"])
+    sym = _pick(df, "SYMBOL")
+    isin = _pick(df, "ISIN_NUMBER", "ISIN", contains=["ISIN"])
+    fv = _pick(df, "FACE_VALUE", contains=["FACE"])
+    listed = _pick(df, "DATE_OF_LISTING", contains=["LISTING"])
+    if sym is None or isin is None or fv is None:
+        raise ParseError("EQUITY_L.csv lacks SYMBOL / ISIN NUMBER / FACE VALUE")
+    out = pd.DataFrame({
+        "symbol": _txt(df[sym]),
+        "isin": _txt(df[isin]),
+        "face_value": _num(df[fv]),
+        "listing_date": _dates(df[listed]) if listed else pd.NaT,
+    })
+    out = out[(out["isin"] != "") & (out["face_value"] > 0)]
+    return to_ns(out.drop_duplicates("isin").reset_index(drop=True))
 
 
 def parse_index_members(path: Path) -> pd.DataFrame:

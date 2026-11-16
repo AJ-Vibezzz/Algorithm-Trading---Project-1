@@ -18,26 +18,34 @@ def _compare(root):
     return cfg, panel, merged
 
 
-def test_total_returns_match_truth_when_exchange_adjusts_prevclose(fixture_root):
-    _, _, m = _compare(fixture_root)
+def test_total_returns_match_truth_on_the_real_convention(fixture_root):
+    """Previous close left unadjusted, as in the real files: every adjustment comes from the listed texts."""
+    cfg, _, m = _compare(fixture_root)
     assert (m["_merge"] != "right_only").all(), "every traded row in the truth must be in the panel"
     both = m[(m["_merge"] == "both") & (m["kind"] == "")]
     err = (both["ret_total"] - both["ret_total_true"]).abs()
     assert len(both) > 100_000
+    assert err.max() < 1e-3, "splits, bonuses, rights and dividends must all be recovered from the texts"
+    stats = json.loads((cfg.processed / "panel_stats.json").read_text())
+    by = stats["adjustments_by_source"]
+    assert by.get("ca_text_only", 0) > 50 and "exchange_only" not in by and "exchange+ca_text" not in by
+    assert by.get("ca_ratio_inferred", 0) > 0, "the fixture cuts some ratios off, as the real field does"
+    assert by.get("large_dividend", 0) > 0 and "large_dividend_rejected" not in by
+    assert "unexplained_jump" not in by and "ca_text_rejected" not in by
+    assert stats["share_of_rows_with_face_value"] == 1.0
+
+
+def test_total_returns_match_truth_when_the_exchange_adjusts_the_previous_close(adjusted_root):
+    cfg, _, m = _compare(adjusted_root)
+    both = m[(m["_merge"] == "both") & (m["kind"] == "")]
+    err = (both["ret_total"] - both["ret_total_true"]).abs()
+    assert len(both) > 20_000
     # The exchange publishes its adjusted base price rounded to the paisa, so on an ex-date the
     # recovered return can differ from the exact one by half a paisa relative to the price.
     allowed = 0.0051 / both["prevclose"] * (1 + both["ret_total_true"].abs()) + 1e-6
     assert (err <= allowed).all(), "splits, bonuses, rights and dividends must be recovered to within paisa rounding"
-    assert (err > 1e-4).sum() < 20 and err.max() < 5e-3
-
-
-def test_total_returns_match_truth_when_only_the_action_text_is_available(unadjusted_root):
-    cfg, _, m = _compare(unadjusted_root)
-    both = m[(m["_merge"] == "both") & (m["kind"] == "")]
-    err = (both["ret_total"] - both["ret_total_true"]).abs()
-    assert err.max() < 1e-3
     stats = json.loads((cfg.processed / "panel_stats.json").read_text())
-    assert stats["adjustments_by_source"].get("ca_text_only", 0) > 0, "this fixture must exercise the text-only path"
+    assert stats["adjustments_by_source"].get("exchange+ca_text", 0) > 0, "this fixture must exercise the exchange path"
 
 
 def test_first_trading_day_has_no_return(fixture_root):

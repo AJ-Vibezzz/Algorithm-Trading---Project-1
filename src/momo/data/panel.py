@@ -38,12 +38,15 @@ import numpy as np
 import pandas as pd
 
 from ..config import DataConfig
-from ..frictions import circuit_lock
+from ..frictions import TICK, circuit_lock
 from ..utils import to_ns
 from .corporate_actions import build_action_table
 from .identifiers import assign_security_ids, resolve_duplicates, security_master
 from .ingest import read_interim
 from .size import build_index_members, build_size_lists, estimate_mcap
+
+LARGE_DIVIDEND = 0.20  # share of the previous close above which a dividend must explain the price fall
+JUMP_MIN_TICKS = 3  # an unexplained move must exceed this many ticks to be flagged for review
 
 PANEL_COLUMNS = [
     "date", "sid", "symbol", "series", "isin",
@@ -106,9 +109,96 @@ def _map_actions_to_trading_days(actions: pd.DataFrame, prices: pd.DataFrame) ->
         rights_premium=("rights_premium", "max"),
         demerger=("demerger", "any"),
         capital_change=("capital_change", "any"),
+        split_unknown=("split_unknown", "any"),
+        bonus_unknown=("bonus_unknown", "any"),
+        old_face_value=("old_face_value", "max"),
+        new_face_value=("new_face_value", "min"),
+        dividend_unstated=("dividend_unstated", "any"),
         purposes=("purposes", lambda s: " || ".join(s)),
     )
     return agg
+
+
+def _face_values(df: pd.DataFrame, cfg: DataConfig, stats: dict) -> np.ndarray:
+    """Face value of the share on every row (NaN where it cannot be established).
+
+    Needed for two things only: a rights issue is priced "at a premium of Rs x",
+    i.e. x plus the face value, and some dividends are quoted as a percentage of
+    face value. The exchange's daily file gives the face value from 2024. For
+    earlier days it is rebuilt from facts that carry no look-ahead:
+
+    * a face-value change always brings a new ISIN, so the face value of an
+      ISIN (from the daily file, or from the exchange's list of listed
+      securities) holds for every day that ISIN traded;
+    * going back in time across a split, the face value is divided by the
+      split factor (new / old); a split text naming both values anchors it.
+    """
+    by_isin: Dict[str, float] = {}
+    path = cfg.interim / "equity_list.parquet"
+    if path.exists():
+        el = pd.read_parquet(path)
+        by_isin.update(zip(el["isin"], el["face_value"]))
+    pub = df.loc[df["face_value"].notna() & (df["isin"] != ""), ["isin", "face_value"]].drop_duplicates("isin", keep="last")
+    by_isin.update(zip(pub["isin"], pub["face_value"]))
+
+    known = df["face_value"].where(df["face_value"].notna(), df["isin"].map(by_isin))
+    # A split names its values in the text: on the ex-date the share has the new one.
+    from_text = df["new_face_value"].where(df["split_factor"].notna() & (df["split_factor"] != 1.0))
+    factor = df["split_factor"].fillna(1.0).clip(lower=1e-6)
+    log_cum = np.log(factor).groupby(df["sid"], sort=False).cumsum()  # cumulative split factor, ex-date included
+
+    def carry(anchor: pd.Series) -> pd.Series:
+        """Spread each company's latest anchored value over its other rows along the split chain."""
+        ref_fv = anchor.groupby(df["sid"], sort=False).transform("last")  # 'last' skips blanks
+        ref_cum = log_cum.where(anchor.notna()).groupby(df["sid"], sort=False).transform("last")
+        return ref_fv * np.exp(log_cum - ref_cum)
+
+    fv = carry(known)
+    fv = fv.where(fv.notna(), carry(from_text))
+    stats["share_of_rows_with_face_value"] = round(float(fv.notna().mean()), 4)
+    return fv.round(4).to_numpy(float)
+
+
+# Ratios tried when a split or bonus text was cut off before its ratio (see _infer_cut_off_ratios).
+_FACE_VALUES = (10.0, 5.0, 2.0, 1.0, 0.5, 0.25, 0.2, 0.1)
+_SPLIT_FACTORS = (0.5, 0.2, 0.1, 0.4, 0.25, 0.05, 0.02, 0.01)
+_BONUS_FACTORS = tuple(sorted({b / (a + b) for a, b in [
+    (1, 1), (1, 2), (2, 1), (1, 3), (3, 1), (1, 4), (4, 1), (1, 5), (5, 1), (2, 3), (3, 2), (1, 10), (3, 5), (2, 5),
+    (1, 6), (1, 9), (4, 5), (5, 4), (3, 4), (1, 8), (1, 7), (3, 10), (1, 20)]}))
+INFER_MAX_RESIDUAL = 0.12  # the price must land this close to "previous close x ratio" for a ratio to be accepted
+
+
+def _infer_cut_off_ratios(df: pd.DataFrame, f_text: np.ndarray, close: np.ndarray, cp: np.ndarray) -> np.ndarray:
+    """Recover a split or bonus ratio that the exchange's text was too short to hold.
+
+    "FV SPLIT FROM RS10 TO RS" and "AGM/DIV-RS 29.50/BONUS" announce an event
+    without its ratio. Splits and bonuses come in a small set of standard
+    ratios, so the one that brings the ex-date price closest to the previous
+    close is taken, and only if it lands within ``INFER_MAX_RESIDUAL`` of it
+    and does better than no adjustment. Every such row is labelled
+    ``ca_ratio_inferred`` in the audit log so it can be checked against the
+    company's announcement. Returns a mask of the rows where a ratio was set;
+    ``f_text`` is updated in place.
+    """
+    split_q = df["split_unknown"].eq(True).to_numpy()
+    bonus_q = df["bonus_unknown"].eq(True).to_numpy()
+    old_fv = df["old_face_value"].to_numpy(float)
+    inferred = np.zeros(len(df), bool)
+    for i in np.where((split_q | bonus_q) & np.isfinite(cp) & (cp > 0) & np.isfinite(close))[0]:
+        splits = [1.0]
+        if split_q[i]:
+            splits = ([v / old_fv[i] for v in _FACE_VALUES if v < old_fv[i]] if np.isfinite(old_fv[i]) and old_fv[i] > 0
+                      else list(_SPLIT_FACTORS))
+        bonuses = list(_BONUS_FACTORS) if bonus_q[i] else [1.0]
+        candidates = [a * b for a in splits for b in bonuses]
+        if not candidates:
+            continue
+        residual = [abs(close[i] / (cp[i] * f_text[i] * c) - 1.0) for c in candidates]
+        best = int(np.argmin(residual))
+        if residual[best] <= INFER_MAX_RESIDUAL and residual[best] < abs(close[i] / (cp[i] * f_text[i]) - 1.0):
+            f_text[i] *= candidates[best]
+            inferred[i] = True
+    return inferred
 
 
 def _compute_returns(df: pd.DataFrame, cfg: DataConfig) -> pd.DataFrame:
@@ -126,9 +216,15 @@ def _compute_returns(df: pd.DataFrame, cfg: DataConfig) -> pd.DataFrame:
 
     # --- factor implied by the corporate-action text -------------------------
     f_text = df["split_factor"].fillna(1.0).to_numpy(float) * df["bonus_factor"].fillna(1.0).to_numpy(float)
+    inferred = _infer_cut_off_ratios(df, f_text, close, cp)
     r_new = df["rights_new"].fillna(0.0).to_numpy(float)
     r_held = df["rights_held"].fillna(0.0).to_numpy(float)
-    issue_price = df["rights_premium"].to_numpy(float) + np.where(np.isfinite(fv), fv, np.nan)
+    premium = df["rights_premium"].to_numpy(float)
+    # Issue price = premium + face value. Where the face value cannot be established and a premium
+    # is stated, the premium alone is used: the issue price is then understated by the face value
+    # (Rs 10 at most), a small error next to leaving the ex-rights fall in the return.
+    fv_assumed = (r_new > 0) & np.isfinite(premium) & (premium > 0) & ~np.isfinite(fv)
+    issue_price = premium + np.where(np.isfinite(fv), fv, np.where(fv_assumed, 0.0, np.nan))
     with np.errstate(divide="ignore", invalid="ignore"):
         terp = (r_held * cp + r_new * issue_price) / (r_held + r_new)
         f_rights = np.where((r_new > 0) & (r_held > 0) & np.isfinite(issue_price) & (issue_price < cp),
@@ -142,8 +238,7 @@ def _compute_returns(df: pd.DataFrame, cfg: DataConfig) -> pd.DataFrame:
     div = df["dividend"].fillna(0.0).to_numpy(float)
     div_pct = df["dividend_pct_fv"].fillna(0.0).to_numpy(float)
     div = div + np.where(np.isfinite(fv), div_pct / 100.0 * fv, 0.0)
-    with np.errstate(divide="ignore", invalid="ignore"):
-        div = np.where((cp > 0) & (div / cp > 0.5), 0.0, div)  # a "dividend" above half the price is a parse error
+    pct_without_fv = (div_pct > 0) & ~np.isfinite(fv)
 
     # --- choose the base price for the day's return -----------------------------
     exch_adj = g_ok & (np.abs(g - 1.0) > tol)
@@ -164,6 +259,13 @@ def _compute_returns(df: pd.DataFrame, cfg: DataConfig) -> pd.DataFrame:
     base[use_ca] = cp[use_ca] * f_ca[use_ca]
     with np.errstate(divide="ignore", invalid="ignore"):
         ret_price = close / base - 1.0
+        # A very large dividend is real often enough (special dividends of half the share price and
+        # more occur) but is also what a misread amount looks like. A real one explains the fall in
+        # the price; a misread one creates a jump. Above LARGE_DIVIDEND of the price the dividend is
+        # used only if adding it back brings the day's return closer to zero.
+        large = (cp > 0) & (div / cp > LARGE_DIVIDEND)
+        div_rejected = large & ~(np.abs((close + div) / base - 1.0) < np.abs(ret_price))
+        div = np.where(div_rejected, 0.0, div)
         div_used = div if cfg.include_dividends else np.zeros_like(div)
         ret_total = (close + div_used) / base - 1.0
 
@@ -186,13 +288,21 @@ def _compute_returns(df: pd.DataFrame, cfg: DataConfig) -> pd.DataFrame:
     source[use_exch & has_ca & ~agree] = "exchange_vs_ca_text_mismatch"
     source[use_exch & ~has_ca] = "exchange_only"
     source[use_ca] = "ca_text_only"
+    source[use_ca & fv_assumed] = "ca_text_rights_face_value_unknown"
+    source[use_ca & inferred] = "ca_ratio_inferred"
     source[has_ca & ~exch_adj & ~ca_sane] = "ca_text_rejected"
     source[div_like] = "exchange_dividend_adjusted"
     source[neutral] = "demerger_neutralised"
     source[rights_unpriced & ~exch_adj] = "rights_not_adjusted"
-    unexplained = (source == "") & ~first & (np.abs(ret_price) > 0.25)
+    source[(source == "") & div_rejected] = "large_dividend_rejected"
+    source[(source == "") & large & ~div_rejected] = "large_dividend"
+    # A move of a few ticks on a share priced under a rupee is a large percentage but needs no
+    # explanation (Rs 0.15 to Rs 0.20 is one tick and 33%); only larger moves are flagged.
+    unexplained = ((source == "") & ~first & (np.abs(ret_price) > 0.25)
+                   & (np.abs(close - base) > JUMP_MIN_TICKS * TICK + 1e-9))
     source[unexplained] = "unexplained_jump"
     source[first] = ""
+    df["dividend_pct_without_face_value"] = pct_without_fv
 
     df["dividend"] = div
     df["adj_factor"] = np.where(first, 1.0, base / np.where(cp > 0, cp, np.nan))
@@ -330,7 +440,8 @@ def build_panel(cfg: DataConfig, verbose: bool = True) -> Dict[str, Path]:
     stats["corporate_action_lines_not_understood"] = int(actions["n_unrecognised"].sum()) if len(actions) else 0
     mapped = _map_actions_to_trading_days(actions, df)
     ca_cols = ["split_factor", "bonus_factor", "dividend", "dividend_pct_fv", "rights_new", "rights_held",
-               "rights_premium", "demerger", "capital_change", "purposes"]
+               "rights_premium", "demerger", "capital_change", "split_unknown", "bonus_unknown",
+               "old_face_value", "new_face_value", "dividend_unstated", "purposes"]
     if len(mapped):
         df = df.merge(mapped[["symbol", "date"] + ca_cols], on=["symbol", "date"], how="left")
     else:
@@ -340,7 +451,10 @@ def build_panel(cfg: DataConfig, verbose: bool = True) -> Dict[str, Path]:
     by_sid = df.groupby("sid", sort=False)
     df["close_prev"] = by_sid["close"].shift(1)
     df["date_prev"] = by_sid["date"].shift(1)
+    df["face_value"] = _face_values(df, cfg, stats)
     df = _compute_returns(df, cfg)
+    stats["dividend_events_without_an_amount"] = int(df["dividend_unstated"].eq(True).sum())
+    stats["dividends_in_percent_without_face_value"] = int(df["dividend_pct_without_face_value"].sum())
     df = _spread_inputs(df)
     df = _apply_overrides(df, cfg, stats)
 

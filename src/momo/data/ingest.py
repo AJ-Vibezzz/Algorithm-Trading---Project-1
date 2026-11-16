@@ -308,6 +308,12 @@ def ingest(cfg: DataConfig, force: bool = False, progress: bool = True) -> Dict[
             parsers.parse_symbol_changes(sc).to_parquet(interim / "symbol_changes.parquet", index=False)
         except Exception as exc:
             errors.append({"dataset": "static", "date": "", "file": sc.name, "error": str(exc)})
+    el = static / "EQUITY_L.csv"
+    if el.exists():
+        try:
+            parsers.parse_equity_list(el).to_parquet(interim / "equity_list.parquet", index=False)
+        except Exception as exc:
+            errors.append({"dataset": "static", "date": "", "file": el.name, "error": str(exc)})
     seeds = []
     for path in sorted(static.glob("ind_*list*.csv")) if static.exists() else []:
         try:
