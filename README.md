@@ -4,7 +4,7 @@ Term Project 1, MBA elective *Algorithmic Trading Strategies*. The brief is in [
 
 This repository contains a point-in-time back-testing framework for momentum strategies on NSE stocks, built to the brief's realism rules, and the working documents for the report. It runs from raw exchange files to a pack of tables and charts.
 
-**It does not contain a strategy, results or conclusions.** Those are the group's to produce: see [Who does what](#who-does-what).
+**It does not contain a strategy, results or conclusions.** Those are the group's to produce: see [Who does what](#who-does-what). Your to-do list, in order: [`docs/00_group_checklist.md`](docs/00_group_checklist.md).
 
 ## Who does what
 

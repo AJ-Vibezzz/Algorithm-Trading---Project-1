@@ -13,7 +13,9 @@ The course policy makes you responsible for every number, citation and line of c
 
 - [ ] The download summary shows no `blocked` or `error` rows (re-run if it does).
 - [ ] `data/interim/_parse_errors.csv` is empty, or you understand every line in it.
-- [ ] `quality/by_year.csv`: trading days per year are about 245-250; the number of companies is plausible; `share_rows_with_shares_outstanding` is near 1 for the years you use.
+- [ ] `quality/by_year.csv`: trading days per year are about 245-250; the number of companies is plausible; the `share_rows_mcap_from_*` columns show where market cap came from in the years you use.
+- [ ] `quality/index_replication.csv`: the Nifty 50 and Next 50 rebuilt from their members track the published indices (correlation near 0.999); the largest differences in `index_replication_largest_differences.csv` reviewed.
+- [ ] `quality/adjustments_to_check.csv`: each judgement-based adjustment (inferred ratio, very large dividend) checked against the company's announcement.
 - [ ] `quality/calendar_gaps.csv`: every weekday without data is a known market holiday.
 - [ ] `quality/exits.csv`: companies that stopped trading are present. Pick three you know (a merger, an insolvency, a voluntary delisting) and confirm their last dates.
 - [ ] `adjustment_log.csv`: at least twelve split / bonus / rights rows checked against an exchange notice or an independent adjusted-price series. Record which ones: __________
