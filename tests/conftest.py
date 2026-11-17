@@ -53,6 +53,10 @@ def build_fixture(name: str, spec: FixtureSpec) -> Path:
     if stamp.exists() and stamp.read_text() == sig:
         return root
     shutil.rmtree(root, ignore_errors=True)
+    # pytest hides normal output; write straight to the terminal so a first run does not look frozen
+    sys.__stderr__.write(f"\n[setup] building synthetic test data '{name}' - first run only, about 1-3 minutes, "
+                         "no output meanwhile ...\n")
+    sys.__stderr__.flush()
     generate_fixture(root, spec)
     cfg = DataConfig(root=str(root), data_kind="synthetic")
     ingest(cfg, progress=False)
