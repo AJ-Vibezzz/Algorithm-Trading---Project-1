@@ -128,21 +128,25 @@ def cmd_check(args) -> None:
     from .data.external import external_inventory
 
     _banner("Strategy configuration")
+    missing, problems = [], []
     try:
         cfg = StrategyConfig.load(args.strategy)
     except ConfigError as exc:
-        sys.exit(str(exc))
-    missing = cfg.missing()
-    if missing:
-        print(f"{len(missing)} design field(s) still to be decided by the group:")
-        for m in missing:
-            print(f"  - {m}")
+        # No strategy yet: say so, but still report the data and charges below.
+        print(str(exc))
+        missing = ["(no strategy file)"]
     else:
-        print("All required design fields are filled in.")
-    problems = cfg._range_checks()
-    for p in problems:
-        print(f"  problem: {p}")
-    print(f"Fingerprint of this parameter set: {cfg.fingerprint()}")
+        missing = cfg.missing()
+        if missing:
+            print(f"{len(missing)} design field(s) still to be decided by the group:")
+            for m in missing:
+                print(f"  - {m}")
+        else:
+            print("All required design fields are filled in.")
+        problems = cfg._range_checks()
+        for p in problems:
+            print(f"  problem: {p}")
+        print(f"Fingerprint of this parameter set: {cfg.fingerprint()}")
 
     _banner("Files you supply (data/external)")
     data_cfg = DataConfig.load(args.data_config)
