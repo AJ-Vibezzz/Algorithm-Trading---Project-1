@@ -11,6 +11,7 @@ The commands follow the order of the project::
     freeze     lock the chosen parameters                     -> config/frozen_strategy.yaml
     test       back-test the untouched TEST period            -> results/test
     full       training + test in one run (stress windows)    -> results/full
+    sizecheck  which size measures the data supports, from when, and how far they agree
     liquidity  how liquid each size segment is, year by year (to choose filters and fund size)
     episodes   list the large falls of an index, with dates (to choose stress windows)
 
