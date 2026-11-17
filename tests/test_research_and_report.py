@@ -132,3 +132,13 @@ def test_report_pack_writes_every_exhibit_and_marks_it_synthetic(ws, cfg, tmp_pa
     assert pack["manifest"]["data_kind"] == "synthetic" and pack["manifest"]["config_fingerprint"] == cfg.fingerprint()
     summary = pack["01_performance_summary"]
     assert {"net", "gross", "paper"} <= set(summary.columns)
+
+
+def test_a_training_run_counts_as_a_trial_and_a_rerun_does_not_double_count(ws, cfg, net, tmp_path):
+    from momo.research import TrialRegistry, record_training_run
+    reg = TrialRegistry(tmp_path / "research")
+    assert record_training_run(reg, ws, cfg, net, note="first look") == 1
+    assert record_training_run(reg, ws, cfg, net, note="same settings again") == 1
+    changed = cfg.with_overrides({"portfolio.n_holdings": 25})
+    assert record_training_run(reg, ws, changed, net) == 2
+    assert len(reg.trials()) == 3 and set(reg.trials()["period"]) == {"train"}

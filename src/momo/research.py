@@ -149,6 +149,23 @@ def grid_search(ws, cfg: StrategyConfig, registry: TrialRegistry, grid: Optional
     return pd.DataFrame(rows)
 
 
+def record_training_run(registry: TrialRegistry, ws, cfg: StrategyConfig, result: BacktestResult,
+                        note: str = "") -> int:
+    """Log one training-period run (the `train` command) as a trial. Returns the distinct sets so far."""
+    sm = cfg.sample
+    rf = pd.Series(ws.md.rf_daily, index=ws.md.dates)
+    row: Dict[str, Any] = {
+        "timestamp": dt.datetime.now().isoformat(timespec="seconds"),
+        "fingerprint": cfg.fingerprint(), "period": "train",
+        "start": sm.train_start.isoformat(), "end": sm.train_end.isoformat(),
+        "data_kind": ws.md.data_kind, "note": note, "overrides": "{}",
+    }
+    row.update(_metrics(result, rf))
+    row["error"] = ""
+    registry.record(row)
+    return registry.n_parameter_sets()
+
+
 def sensitivity_table(trials: pd.DataFrame, row_param: str, col_param: str, metric: str = "sharpe") -> pd.DataFrame:
     """Average ``metric`` for each pair of values of two parameters (a robustness check).
 

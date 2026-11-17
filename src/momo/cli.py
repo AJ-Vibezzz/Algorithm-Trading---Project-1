@@ -176,6 +176,12 @@ def _run_period(args, start, end, label: str, log_test_access: bool) -> None:
         # Logs the access and warns if the parameters were not frozen first.
         evaluate_test(ws, cfg, registry)
     variants = run_variants(ws, cfg, start, end)
+    if label == "train" and not cfg.meta.is_example:
+        # Every parameter set looked at on the training period counts towards "how many did you try",
+        # whether it came from `search` or from editing strategy.yaml and running `train` again.
+        from .research import record_training_run
+        n = record_training_run(registry, ws, cfg, variants["net"], note=getattr(args, "note", "") or "train command")
+        print(f"Logged in {registry.trials_path}. Parameter sets tried on the training period so far: {n}")
     capacity = None
     if cfg.research.capacity_aum_inr:
         print("Capacity sweep ...")
