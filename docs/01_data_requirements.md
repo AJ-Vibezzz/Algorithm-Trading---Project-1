@@ -64,7 +64,7 @@ All are plain CSV with a header row. Column names are matched loosely (case and 
 
 The brief names RBI's Database on Indian Economy (DBIE) as the source. Use the 91-day Treasury bill yield.
 
-DBIE is at https://data.rbi.org.in/#/dbie/home. If it does not load, the same auction yields are in RBI's *Handbook of Statistics on Indian Economy* (table on auctions of 91-day Treasury Bills, Excel download). In Excel keep the date and yield columns, rename them `date` and `yield_pct`, delete title and note rows, and save as CSV.
+DBIE is at https://data.rbi.org.in/#/dbie/home. If it does not load, the same auction yields are in RBI's *Handbook of Statistics on Indian Economy* (table on auctions of 91-day Treasury Bills, Excel download). In Excel keep the date and yield columns, rename them `date` and `yield_pct`, delete title and note rows, and save as CSV - or let `python tools/rbi_tbill_to_csv.py <the downloaded .xlsx>` do it. The file in this repository was made that way from RBI's table *Auctions of 91-Day Government of India Treasury Bills* (kept as downloaded in `data/external/source/`): auction date and implicit yield at the cut-off price, 1993 to 11 November 2026; auctions with no accepted bids are left out.
 
 | column | example | meaning |
 |---|---|---|
