@@ -180,7 +180,11 @@ def load_benchmark_tri(cfg: DataConfig) -> pd.DataFrame:
         name = re.sub(r"\s+", " ", name.replace("_", " ")).strip().upper()
         s = pd.Series(pd.to_numeric(df[vcol].astype(str).str.replace(",", ""), errors="coerce").to_numpy(),
                       index=_to_date(df[dcol]))
-        s = s[s.index.notna()].dropna().sort_index()
+        s = s[s.index.notna()].dropna()
+        # niftyindices.com serves long histories in pieces: several files of one index are joined
+        series[name] = pd.concat([series[name], s]) if name in series else s
+    for name, s in series.items():
+        s = s.sort_index()
         series[name] = s[~s.index.duplicated(keep="last")]
     return pd.DataFrame(series).sort_index()
 

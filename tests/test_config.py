@@ -80,3 +80,18 @@ def test_literature_configs_load_and_use_the_pipeline_window_convention():
         (folder / "02_carhart_1997_pr1yr.yaml").read_text()).items() if k != "source"})
     c = carhart.signal.components[0]
     assert (c.lookback_months, c.skip_months) == (12, 1)
+
+
+def test_benchmark_history_split_over_several_files_is_joined(tmp_path):
+    from momo.config import DataConfig
+    from momo.data.external import load_benchmark_tri
+    folder = tmp_path / "external" / "benchmarks"
+    folder.mkdir(parents=True)
+    (folder / "part1.csv").write_text('Index Name,Date,Total Returns Index\n'
+                                      'Nifty MidSmallcap 400,"03 Jan 2011",1000.5\nNifty MidSmallcap 400,"04 Jan 2011","1,001.25"\n')
+    (folder / "part2.csv").write_text('Index Name,Date,Total Returns Index\n'
+                                      'Nifty MidSmallcap 400,"02 Jan 2012",1100\n')
+    tri = load_benchmark_tri(DataConfig(root=str(tmp_path)))
+    assert list(tri.columns) == ["NIFTY MIDSMALLCAP 400"]
+    s = tri["NIFTY MIDSMALLCAP 400"].dropna()
+    assert len(s) == 3 and s.iloc[1] == 1001.25 and str(s.index[-1].date()) == "2012-01-02"
