@@ -11,12 +11,14 @@ download_start: null            # e.g. 2012-01-01
 download_end: null              # null = up to today
 
 # Daily files to fetch (all public, from the NSE archive host):
-#   cm_bhav    prices, volumes, previous close, ISIN          (required)
-#   pr         corporate actions, market cap, price-band hits (required)
-#   ind_close  index levels for benchmarks                    (required)
-#   fo_bhav    which stocks had futures - only if you design a short leg or hedge
-#   sec_list   security-wise price bands - optional cross-check
-datasets: [cm_bhav, pr, ind_close]
+#   cm_bhav     prices, volumes, previous close, ISIN                       (required)
+#   pr          corporate actions, price-band hits, market cap from 2024     (required)
+#   ind_close   index levels for benchmarks, from 2012                       (required)
+#   mcwb        monthly Nifty 50 / Next 50 members and weights, from 2008    (required: large caps, data check)
+#   mcap_lists  NSE market-cap lists for all companies, 2019-2024            (required: market cap before 2024)
+#   fo_bhav     which stocks had futures - only if you design a short leg or hedge
+#   sec_list    security-wise price bands - optional cross-check
+datasets: [cm_bhav, pr, ind_close, mcwb, mcap_lists]
 
 archive_base_url: "https://nsearchives.nseindia.com"
 max_workers: 4                  # parallel connections - keep this low, NSE throttles
