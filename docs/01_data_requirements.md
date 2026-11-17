@@ -98,6 +98,8 @@ Total-return index history, one file per index, as downloadable from the NSE Ind
 
 A series loaded here is available as a benchmark under its name with ` TRI` appended, e.g. `NIFTY SMALLCAP 250 TRI`.
 
+niftyindices.com gives at most a year per download. `python tools/niftyindices_tri_to_csv.py <the files, or a zip of them>` joins them into one file per index. The repository holds `NIFTY MIDSMALLCAP 400 TRI.csv` made that way from the group's download (kept as downloaded in `data/external/source/`): 4 Jan 2010 to 17 Nov 2026, 4,187 days.
+
 ### 2.4 `index_constituents/*.csv` - only if `universe.source: index_constituents`
 
 Historical membership with dates. A list of *today's* members is not acceptable: that is the look-ahead the brief forbids, and the loader rejects a file without start dates.
