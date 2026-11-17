@@ -1,0 +1,51 @@
+# =============================================================================
+# LITERATURE CONFIG 14 - Hong, Lim & Stein (2000): size, analyst coverage and momentum
+# Layout follows strategy_template.yaml; records the SOURCE, not your design.
+# null = source silent / not applicable. "[verify]" = check against original.
+# Window convention (as this pipeline reads it - src/momo/signals.py, _window):
+# lookback_months = months from the decision date back to the START of the window,
+# skip_months = months from the decision date back to its END. So "12-1"
+# momentum (returns of months t-12..t-2, decided at the end of t-1) = lookback 12, skip 1.
+# =============================================================================
+
+source:
+  citation: "Hong, H., Lim, T. & Stein, J. C. (2000). Bad News Travels Slowly: Size, Analyst Coverage, and the Profitability of Momentum Strategies. Journal of Finance, 55(1), 265-295."
+  doi: "10.1111/0022-1082.00206"
+  family: cross-sectional momentum (information-diffusion conditioning)
+  market: "US - NYSE, AMEX, NASDAQ"
+  sample_in_paper: "1976-1996"   # [verify]
+  long_short_in_paper: true
+  headline_finding: >
+    Past the very smallest stocks, momentum profits fall sharply with firm size.
+    Holding size fixed, momentum is stronger among stocks with low analyst coverage
+    (about 1.13% a month in the low-residual-coverage group), and the effect is
+    concentrated in past LOSERS - bad news diffuses slowly.
+  pipeline_fit: partial
+  pipeline_notes: >
+    Not a stand-alone strategy so much as the economic rationale for trading
+    momentum in smaller, thinly-covered stocks - i.e. for your choice of mid /
+    small / micro segment. Two cautions for a long-only book: the strongest effect
+    is on the short (loser) side you cannot hold; and the smallest stocks were
+    excluded because of thin market-making capacity. Analyst coverage is not in
+    the template.
+
+meta:
+  strategy_name: "lit-HongLimStein2000"
+  authors: []
+  design_note: "Momentum is strongest where information travels slowly: smaller, less-covered stocks."
+  is_example: false
+
+universe:
+  segments: null               # the paper motivates smaller segments; which ones is your decision
+
+signal:
+  components:
+    - kind: return
+      lookback_months: 6       # [verify]
+      skip_months: 0           # [verify]
+      weight: 1.0
+
+portfolio:
+  holding_months: 6            # [verify]
+
+# Not specified for an NSE setting: sample, capital, benchmark, execution, costs, risk, stress, research.

@@ -1,0 +1,70 @@
+# =============================================================================
+# LITERATURE CONFIG 17 - Daniel & Moskowitz (2016): momentum crashes and dynamic momentum
+# Layout follows strategy_template.yaml; records the SOURCE, not your design.
+# null = source silent / not applicable. "[verify]" = check against original.
+# Window convention (as this pipeline reads it - src/momo/signals.py, _window):
+# lookback_months = months from the decision date back to the START of the window,
+# skip_months = months from the decision date back to its END. So "12-1"
+# momentum (returns of months t-12..t-2, decided at the end of t-1) = lookback 12, skip 1.
+# =============================================================================
+
+source:
+  citation: "Daniel, K. & Moskowitz, T. J. (2016). Momentum crashes. Journal of Financial Economics, 122(2), 221-247."   # vol/pages [verify]
+  doi: "10.1016/j.jfineco.2015.12.002"   # [verify]
+  working_paper: "NBER Working Paper 20439 (2014)"
+  family: risk-managed momentum (crash forecasting)
+  market: "US stocks; also other equity markets and asset classes"
+  sample_in_paper: "1927-2013"
+  long_short_in_paper: true
+  headline_finding: >
+    Momentum crashes are partly forecastable: they occur in panic states - after
+    market declines and when volatility is high - and coincide with sharp market
+    rebounds, when past losers (which behave like written call options) shoot up.
+    A dynamic strategy that scales exposure by forecast mean over forecast variance
+    roughly doubles the alpha and Sharpe ratio of static momentum.
+  pipeline_fit: partial
+  pipeline_notes: >
+    Forecast mean comes from a regression on a bear-market indicator (trailing
+    two-year market return negative) interacted with recent market variance;
+    forecast variance from recent realised volatility of the strategy. [verify
+    exact windows and model] The crash mechanism lives mainly in the SHORT
+    (loser) leg, so long-only momentum is less exposed - though not immune. In the
+    template, approximate with vol_target plus a regime_filter; neither forecasts
+    the mean.
+
+meta:
+  strategy_name: "lit-DanielMoskowitz2016-Dynamic"
+  authors: []
+  design_note: "Cut momentum exposure in bear markets with high volatility, when rebound-driven crashes are likely."
+  is_example: false
+
+signal:
+  components:
+    - kind: return
+      lookback_months: 12      # [verify]   # window t-12..t-2 = lookback 12, skip 1
+      skip_months: 1           # [verify]
+      weight: 1.0
+
+portfolio:
+  selection: top_fraction
+  top_fraction: 0.10           # [verify]
+  weighting: null              # [verify]
+  holding_months: 1
+  rebalance: monthly
+
+risk:
+  vol_target:
+    enabled: true              # approximation of the variance half
+    annual_vol: null
+    lookback_days: 126         # [verify]
+  regime_filter:
+    enabled: true              # approximation of the bear-market half
+    index: null
+    ma_days: null              # source uses the sign of the 24-month market return
+    exposure_when_below: null
+
+stress:
+  windows: []                  # this paper is the reference for the brief's "momentum crash" stress test;
+                               # identify the Indian episodes (rebounds after sharp falls) yourself
+
+# Not specified for an NSE setting: universe, sample, capital, benchmark, execution, costs, research.

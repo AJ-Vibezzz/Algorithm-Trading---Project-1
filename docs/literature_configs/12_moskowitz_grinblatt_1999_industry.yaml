@@ -1,0 +1,49 @@
+# =============================================================================
+# LITERATURE CONFIG 12 - Moskowitz & Grinblatt (1999): industry momentum
+# Layout follows strategy_template.yaml; records the SOURCE, not your design.
+# null = source silent / not applicable. "[verify]" = check against original.
+# Window convention (as this pipeline reads it - src/momo/signals.py, _window):
+# lookback_months = months from the decision date back to the START of the window,
+# skip_months = months from the decision date back to its END. So "12-1"
+# momentum (returns of months t-12..t-2, decided at the end of t-1) = lookback 12, skip 1.
+# =============================================================================
+
+source:
+  citation: "Moskowitz, T. J. & Grinblatt, M. (1999). Do Industries Explain Momentum? Journal of Finance, 54(4), 1249-1290."
+  doi: "10.1111/0022-1082.00146"
+  family: industry (sector) momentum
+  market: "US stocks grouped into 20 industries by two-digit SIC code"
+  sample_in_paper: "1963-1995"   # [verify]
+  long_short_in_paper: true
+  headline_finding: >
+    Buying stocks in past winning industries and selling those in past losing
+    industries is highly profitable, and individual-stock momentum is much weaker
+    once industry momentum is controlled for.
+  pipeline_fit: none
+  pipeline_notes: >
+    Industries are ranked on 6-month value-weighted returns; long the top 3, short
+    the bottom 3 of 20; held 6 months. The pipeline ranks stocks, not sectors, so
+    this cannot run as is. Practical uses in your design: (a) the
+    max_weight_per_sector limit controls how much industry bet a stock-level book
+    takes; (b) attribution - decompose P&L into sector vs stock-specific.
+    Indian sectoral momentum: see Sehgal & Jain (2011), file 28.
+
+meta:
+  strategy_name: "lit-MoskowitzGrinblatt1999-Industry"
+  authors: []
+  design_note: "Buy stocks in the three best-performing industries over the last six months."
+  is_example: false
+
+signal:
+  components:
+    - kind: return             # computed on INDUSTRY portfolios in the source
+      lookback_months: 6
+      skip_months: 0           # contiguous in headline result  [verify]
+      weight: 1.0
+
+portfolio:
+  holding_months: 6
+  weighting: null              # value-weighted within industries in source
+  max_weight_per_sector: null  # your decision; this paper is the reason it matters
+
+# Not specified for an NSE setting: universe, sample, capital, benchmark, execution, costs, risk, stress, research.

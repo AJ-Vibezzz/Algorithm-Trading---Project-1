@@ -1,0 +1,58 @@
+# =============================================================================
+# LITERATURE CONFIG 29 - Agarwalla, Jacob & Varma (2013): Indian WML factor (IIMA data library)
+# Layout follows strategy_template.yaml; records the SOURCE, not your design.
+# null = source silent / not applicable. "[verify]" = check against original.
+# Window convention (as this pipeline reads it - src/momo/signals.py, _window):
+# lookback_months = months from the decision date back to the START of the window,
+# skip_months = months from the decision date back to its END. So "12-1"
+# momentum (returns of months t-12..t-2, decided at the end of t-1) = lookback 12, skip 1.
+# =============================================================================
+
+source:
+  citation: "Agarwalla, S. K., Jacob, J. & Varma, J. R. (2013). Four factor model in Indian equities market. Working Paper W.P. No. 2013-09-05, Indian Institute of Management Ahmedabad (revised September 2014)."
+  data: "Fama French and Momentum Factors: Data Library for Indian Market - faculty.iima.ac.in/~iffm/Indian-Fama-French-Momentum/"
+  ssrn: "abstract 2334482"
+  family: momentum factor construction (India)
+  market: "India - CMIE Prowess universe, illiquid firms excluded"
+  sample_in_paper: "October 1993 - December 2013 (paper); library updated since (new series)"
+  long_short_in_paper: true
+  headline_finding: >
+    Builds Indian Fama-French and momentum factors with wider coverage than earlier
+    studies, excludes illiquid firms so portfolios are investable, uses size
+    cut-offs suited to India's firm-size distribution, and corrects returns for
+    survivorship. The revised paper reports a momentum factor (WML) averaging about
+    21.9% a year from 1994 to 2014.
+  pipeline_fit: partial
+  pipeline_notes: >
+    Most useful to you as DATA, not as a strategy: regress your returns on the
+    library's market, SMB, HML and WML series for the factor-exposure analysis the
+    brief requires. WML is built from size x momentum portfolios (the new series
+    publishes four size-momentum portfolios and breakpoints). The exact momentum
+    window and breakpoints: [verify in the paper and library notes]. The new series
+    differs from the working paper's numbers because of data and method changes -
+    cite the release you use.
+
+meta:
+  strategy_name: "lit-AJV-IIMA-WML"
+  authors: []
+  design_note: "Indian winners-minus-losers factor, investable universe, survivorship-corrected."
+  is_example: false
+
+universe:
+  source: null                 # Prowess, liquidity-filtered; not an NSE index
+
+signal:
+  components:
+    - kind: return
+      lookback_months: 12      # [verify]   # window t-12..t-2 = lookback 12, skip 1
+      skip_months: 1           # [verify]
+      weight: 1.0
+
+portfolio:
+  selection: top_fraction
+  top_fraction: null           # [verify breakpoints]
+  weighting: null              # [verify]
+  holding_months: 1            # [verify]
+  rebalance: monthly           # [verify]
+
+# Not specified for your mandate: sample, capital, benchmark, execution, costs, risk, stress, research.

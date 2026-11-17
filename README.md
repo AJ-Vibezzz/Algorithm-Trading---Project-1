@@ -93,6 +93,7 @@ data/
 docs/
   01_data_requirements.md     what to supply and in what layout
   02_literature_review.md     reading guide with verification status
+  literature_configs/         32 published strategies written in the template's layout (evidence, not your design)
   03_design_decisions.md      the choices, the evidence, and blanks for your reasons
   04_methodology.md           how each rule is implemented; known limitations
   05_risk_policy_template.md  skeleton of the written risk policy

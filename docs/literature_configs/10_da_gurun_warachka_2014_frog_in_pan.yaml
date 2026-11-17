@@ -1,0 +1,61 @@
+# =============================================================================
+# LITERATURE CONFIG 10 - Da, Gurun & Warachka (2014): "Frog in the Pan" momentum
+# Layout follows strategy_template.yaml; records the SOURCE, not your design.
+# null = source silent / not applicable. "[verify]" = check against original.
+# Window convention (as this pipeline reads it - src/momo/signals.py, _window):
+# lookback_months = months from the decision date back to the START of the window,
+# skip_months = months from the decision date back to its END. So "12-1"
+# momentum (returns of months t-12..t-2, decided at the end of t-1) = lookback 12, skip 1.
+# =============================================================================
+
+source:
+  citation: "Da, Z., Gurun, U. G. & Warachka, M. (2014). Frog in the Pan: Continuous Information and Momentum. Review of Financial Studies, 27(7), 2171-2218."
+  doi: "10.1093/rfs/hhu003"
+  family: cross-sectional momentum (path-quality filter)
+  market: "US stocks (CRSP)"
+  sample_in_paper: null        # [verify]
+  long_short_in_paper: true
+  headline_finding: >
+    Investors under-react to information that arrives in many small doses. Over a
+    six-month holding period momentum falls monotonically from 5.94% among stocks
+    with continuous information to -2.07% among stocks with discrete information
+    but similar formation-period returns, and continuous-information momentum does
+    not reverse in the long run.
+  pipeline_fit: full   # via the information-discreteness filter
+  pipeline_notes: >
+    Information discreteness ID = sign(past return) x (% of negative days - % of
+    positive days) over the formation window; low ID = smooth, continuous path.
+    The paper double-sorts on past return and ID. [verify exact formula and sort]
+    The template's filters.max_information_discreteness implements a screen; the
+    threshold value is a group decision (the paper sorts into groups, it does not
+    publish a cut-off).
+
+meta:
+  strategy_name: "lit-DGW2014-FrogInPan"
+  authors: []
+  design_note: "12-1 momentum restricted to winners whose gains came gradually rather than in jumps."
+  is_example: false
+
+universe:
+  source: null
+  segments: null
+
+signal:
+  components:
+    - kind: return
+      lookback_months: 12      # [verify]   # window t-12..t-2 = lookback 12, skip 1
+      skip_months: 1           # [verify]
+      weight: 1.0
+  filters:
+    max_information_discreteness: null   # screen on; threshold is your choice
+
+portfolio:
+  selection: top_fraction
+  top_fraction: null           # [verify] - depends on the double-sort design
+  weighting: equal             # [verify]
+  holding_months: 6
+  rebalance: monthly
+
+# Not specified for an NSE setting: sample, capital, benchmark, execution, costs, risk, stress, research.
+# Relevance: Indian small caps with lumpy, circuit-driven jumps are the "discrete
+# information" case; this filter is a literature-backed way to avoid them.

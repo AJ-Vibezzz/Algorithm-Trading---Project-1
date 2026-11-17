@@ -54,3 +54,29 @@ def test_overrides_and_fingerprint(cfg):
 def test_range_checks(cfg, path, value, fragment):
     with pytest.raises(ConfigError, match=fragment):
         cfg.with_overrides({path: value}).validate()
+
+
+def test_residual_momentum_needs_its_estimation_window(cfg):
+    blank = cfg.with_overrides({"signal.components.0.kind": "residual",
+                                "signal.components.0.residual_estimation_months": None})
+    assert "signal.components.0.residual_estimation_months" in blank.missing()
+    assert blank._range_checks() == [] or all("residual" not in p for p in blank._range_checks())
+
+
+def test_literature_configs_load_and_use_the_pipeline_window_convention():
+    """The literature files in docs/ must load, and '12-1' momentum must read as lookback 12, skip 1."""
+    import pathlib
+    import yaml
+    from momo.config import StrategyConfig
+    folder = pathlib.Path(__file__).resolve().parents[1] / "docs" / "literature_configs"
+    files = sorted(folder.glob("*.yaml"))
+    assert len(files) == 32
+    for f in files:
+        data = yaml.safe_load(f.read_text())
+        data.pop("source", None)
+        cfg = StrategyConfig.from_dict(data)
+        assert cfg._range_checks() == [], f.name
+    carhart = StrategyConfig.from_dict({k: v for k, v in yaml.safe_load(
+        (folder / "02_carhart_1997_pr1yr.yaml").read_text()).items() if k != "source"})
+    c = carhart.signal.components[0]
+    assert (c.lookback_months, c.skip_months) == (12, 1)

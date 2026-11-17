@@ -19,6 +19,8 @@ This file records, accurately, what the AI assistant did in building this reposi
 | same | An example configuration with placeholder values, to check that the code runs | `config/examples/smoke_test.yaml` | |
 | same | Downloading the public NSE archive (2010-2026), adapting the parsers and corporate-action rules to what the real files contain, and building an index-replication check of the adjusted returns. It reported data facts only (coverage, file layouts, check statistics); no strategy was run on the real data | `src/momo/data/`, `docs/01`, `docs/04` section 9 | |
 | same | Converting the group's RBI download (91-day T-bill auctions) into `risk_free.csv`: selecting the auction-date and cut-off-yield columns, dropping auctions with no accepted bids; no values changed | `tools/rbi_tbill_to_csv.py`, `data/external/risk_free.csv` | |
+| same | Checking the group's literature configs: loading each in the pipeline, converting the signal windows to the pipeline's look-back/skip convention, and looking up four citations' bibliographic records | `docs/literature_configs/` | |
+| ____ (tool used to draft the literature configs, if any) | Drafting the 32 literature configs and their README | `docs/literature_configs/` | |
 | | | | |
 | | | | |
 

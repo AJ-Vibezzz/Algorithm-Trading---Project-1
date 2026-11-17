@@ -1,0 +1,55 @@
+# =============================================================================
+# LITERATURE CONFIG 03 - Fama-French UMD (Mom) factor, Ken French Data Library
+# Layout follows strategy_template.yaml; records the SOURCE, not your design.
+# null = source silent / not applicable. "[verify]" = check against original.
+# Window convention (as this pipeline reads it - src/momo/signals.py, _window):
+# lookback_months = months from the decision date back to the START of the window,
+# skip_months = months from the decision date back to its END. So "12-1"
+# momentum (returns of months t-12..t-2, decided at the end of t-1) = lookback 12, skip 1.
+# =============================================================================
+
+source:
+  citation: "French, K. R. Data Library - 'Momentum Factor (Mom)' methodology note; see also Fama, E. F. & French, K. R. (2012). Size, value, and momentum in international stock returns. Journal of Financial Economics, 105(3), 457-472."   # [verify]
+  doi: "10.1016/j.jfineco.2012.05.011"   # Fama-French 2012  [verify]
+  family: cross-sectional price momentum (factor construction)
+  market: "US - NYSE, AMEX, NASDAQ"      # [verify]
+  sample_in_paper: "1927 onwards (updated monthly)"
+  long_short_in_paper: true
+  headline_finding: >
+    The standard academic momentum factor: six value-weighted portfolios from a
+    2 x 3 sort on size (NYSE median) and prior 2-12 month return (NYSE 30th/70th
+    percentiles); UMD = average of the two high-return portfolios minus average of
+    the two low-return portfolios. [verify breakpoints]
+  pipeline_fit: partial
+  pipeline_notes: >
+    The pipeline has no size x momentum double sort and no value weighting
+    (options are equal, inverse_vol, score, min_variance). The long leg is
+    approximated by top_fraction 0.30 below.
+
+meta:
+  strategy_name: "lit-FF-UMD"
+  authors: []
+  design_note: "Top 30% on t-12..t-2 return within size halves, value-weighted, monthly."
+  is_example: false
+
+universe:
+  source: null
+  segments: null
+
+signal:
+  components:
+    - kind: return
+      lookback_months: 12      # "prior (2-12)" return   # window t-12..t-2 = lookback 12, skip 1
+      skip_months: 1
+      weight: 1.0
+
+portfolio:
+  selection: top_fraction
+  top_fraction: 0.30           # 70th percentile breakpoint  [verify]
+  exit_rank_multiple: 1.0
+  weighting: null              # value-weighted in source - not a pipeline option
+  holding_months: 1
+  rebalance: monthly
+
+# Not specified for an NSE setting: sample, capital, benchmark, execution, costs, risk, stress, research.
+# India analogue: the IIMA data library (file 29) builds WML for Indian stocks.

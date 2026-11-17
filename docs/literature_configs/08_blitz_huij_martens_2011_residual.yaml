@@ -1,0 +1,59 @@
+# =============================================================================
+# LITERATURE CONFIG 08 - Blitz, Huij & Martens (2011): residual momentum
+# Layout follows strategy_template.yaml; records the SOURCE, not your design.
+# null = source silent / not applicable. "[verify]" = check against original.
+# Window convention (as this pipeline reads it - src/momo/signals.py, _window):
+# lookback_months = months from the decision date back to the START of the window,
+# skip_months = months from the decision date back to its END. So "12-1"
+# momentum (returns of months t-12..t-2, decided at the end of t-1) = lookback 12, skip 1.
+# =============================================================================
+
+source:
+  citation: "Blitz, D., Huij, J. & Martens, M. (2011). Residual Momentum. Journal of Empirical Finance, 18(3), 506-521."
+  doi: "10.1016/j.jempfin.2011.01.003"
+  family: cross-sectional momentum (factor-neutral signal)
+  market: "US stocks (CRSP)"
+  sample_in_paper: "1926-2009"
+  long_short_in_paper: true
+  headline_finding: >
+    Conventional momentum has large time-varying exposures to the Fama-French
+    factors. Ranking on stock-specific (residual) returns roughly halves volatility
+    and about doubles the Sharpe ratio, and the effect is more consistent over time
+    and less concentrated in extreme stocks.
+  pipeline_fit: partial
+  pipeline_notes: >
+    Each month a stock's returns are regressed on the three Fama-French factors
+    over the past 36 months (stocks without 36 months are excluded). The signal is
+    the residual return over months t-12..t-2 divided by the residuals' standard
+    deviation over the same window. Top-minus-bottom deciles, equal weight,
+    monthly. The pipeline's kind: residual is MARKET-residual only - it does not
+    strip size and value. For a closer replication on NSE you would need Indian
+    SMB/HML series, e.g. the IIMA library (file 29).
+
+meta:
+  strategy_name: "lit-BHM2011-ResidualMom"
+  authors: []
+  design_note: "Rank on 12-1 residual return scaled by residual volatility, from a 36-month factor regression."
+  is_example: false
+
+universe:
+  source: null
+  segments: null
+
+signal:
+  components:
+    - kind: residual
+      lookback_months: 12      # past 12 months excluding the most recent   # window t-12..t-2 = lookback 12, skip 1
+      skip_months: 1
+      weight: 1.0
+      residual_estimation_months: 36
+
+portfolio:
+  selection: top_fraction
+  top_fraction: 0.10
+  exit_rank_multiple: 1.0
+  weighting: equal
+  holding_months: 1            # 1-month headline; longer holding periods also reported
+  rebalance: monthly
+
+# Not specified for an NSE setting: sample, capital, benchmark, execution, costs, risk, stress, research.

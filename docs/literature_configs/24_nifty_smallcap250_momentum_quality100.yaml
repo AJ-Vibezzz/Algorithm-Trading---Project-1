@@ -1,0 +1,62 @@
+# =============================================================================
+# LITERATURE CONFIG 24 - NSE Indices: Nifty Smallcap250 Momentum Quality 100
+# Layout follows strategy_template.yaml; records the SOURCE, not your design.
+# null = source silent / not applicable. "[verify]" = check against the current
+# NSE Indices methodology document - the quality part was NOT checked here.
+# Window convention (as this pipeline reads it - src/momo/signals.py, _window):
+# lookback_months = months from the decision date back to the START of the window,
+# skip_months = months from the decision date back to its END. So "12-1"
+# momentum (returns of months t-12..t-2, decided at the end of t-1) = lookback 12, skip 1.
+# =============================================================================
+
+source:
+  citation: "NSE Indices Ltd. Methodology Document for Equity Indices (January 2024), section 'Nifty Smallcap250 Momentum Quality 100'. niftyindices.com"
+  doi: null
+  family: multi-factor (momentum + quality), Indian index methodology
+  market: "India - constituents of the Nifty Smallcap 250 (small caps)"
+  sample_in_paper: null        # [verify base and launch dates]
+  long_short_in_paper: false
+  headline_finding: >
+    Uses the same volatility-adjusted 6- and 12-month Momentum Ratio as the other
+    Nifty momentum indices, combined with a quality score, to pick 100 small caps.
+  pipeline_fit: partial
+  pipeline_notes: >
+    Directly in your segment. The momentum half maps to the template exactly as in
+    file 22. The quality score (profitability / leverage / earnings-stability
+    metrics), the momentum-quality weighting and the stock weighting are not
+    template options and were not checked in this pass [verify]. Also useful as a
+    published small-cap momentum BENCHMARK if a total-return series is available.
+
+meta:
+  strategy_name: "lit-NiftySmallcap250MomQuality100"
+  authors: []
+  design_note: "Small caps ranked on volatility-adjusted momentum combined with quality."
+  is_example: false
+
+benchmark:
+  primary: "NIFTY SMALLCAP 250"
+
+universe:
+  source: index_constituents
+  segments: [small]
+  index_names: ["NIFTY SMALLCAP 250"]
+
+signal:
+  components:
+    - kind: risk_adjusted_return
+      lookback_months: 6
+      skip_months: 0           # decided at the end of M-1 on prices up to M-1: no skip
+      weight: null             # momentum/quality split [verify]
+    - kind: risk_adjusted_return
+      lookback_months: 12
+      skip_months: 0           # decided at the end of M-1 on prices up to M-1: no skip
+      weight: null
+  volatility_lookback_days: 252
+
+portfolio:
+  selection: top_n
+  n_holdings: 100
+  weighting: null              # [verify]
+  rebalance: null              # [verify] likely semi-annual
+
+# Not specified as a strategy for your mandate: sample, capital, execution, costs, risk, stress, research.

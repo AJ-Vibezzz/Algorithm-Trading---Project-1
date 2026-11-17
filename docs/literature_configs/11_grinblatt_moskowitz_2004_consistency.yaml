@@ -1,0 +1,44 @@
+# =============================================================================
+# LITERATURE CONFIG 11 - Grinblatt & Moskowitz (2004): consistency of past returns
+# Layout follows strategy_template.yaml; records the SOURCE, not your design.
+# null = source silent / not applicable. "[verify]" = check against original.
+# =============================================================================
+# Window convention (as this pipeline reads it - src/momo/signals.py, _window):
+# lookback_months = months from the decision date back to the START of the window,
+# skip_months = months from the decision date back to its END. So "12-1"
+# momentum (returns of months t-12..t-2, decided at the end of t-1) = lookback 12, skip 1.
+
+source:
+  citation: "Grinblatt, M. & Moskowitz, T. J. (2004). Predicting stock price movements from past returns: the role of consistency and tax-loss selling. Journal of Financial Economics, 71(3), 541-579."
+  doi: "10.1016/S0304-405X(03)00176-4"
+  family: cross-sectional momentum (path-quality filter)
+  market: "US stocks"           # [verify]
+  sample_in_paper: null         # [verify]
+  long_short_in_paper: true
+  headline_finding: >
+    How consistently a stock earned positive past returns, and year-end tax-loss
+    selling, both change how past returns predict future returns; a parsimonious
+    rule built on these earns large returns after controls for other premia and
+    microstructure effects.
+  pipeline_fit: none
+  pipeline_notes: >
+    The consistency rule (winners with positive returns in a large share of the
+    past 12 months, e.g. 8 of 12 [verify]) is not a template option. The closest
+    built-in proxy is the information-discreteness filter (file 10). The tax-loss
+    seasonality is US-specific (December year-end); India's tax year ends in March
+    - any analogue would need its own test.
+
+meta:
+  strategy_name: "lit-GrinblattMoskowitz2004-Consistency"
+  authors: []
+  design_note: "Prefer winners that rose steadily month after month."
+  is_example: false
+
+signal:
+  components:
+    - kind: return
+      lookback_months: 12      # [verify]   # window t-12..t-2 = lookback 12, skip 1
+      skip_months: 1           # [verify]
+      weight: 1.0
+
+# Everything else: not specified / not mappable - see pipeline_notes.

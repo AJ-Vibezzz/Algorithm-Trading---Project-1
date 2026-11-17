@@ -1,0 +1,55 @@
+# =============================================================================
+# LITERATURE CONFIG 18 - Moskowitz, Ooi & Pedersen (2012): time-series momentum
+# Layout follows strategy_template.yaml; records the SOURCE, not your design.
+# null = source silent / not applicable. "[verify]" = check against original.
+# Window convention (as this pipeline reads it - src/momo/signals.py, _window):
+# lookback_months = months from the decision date back to the START of the window,
+# skip_months = months from the decision date back to its END. So "12-1"
+# momentum (returns of months t-12..t-2, decided at the end of t-1) = lookback 12, skip 1.
+# =============================================================================
+
+source:
+  citation: "Moskowitz, T. J., Ooi, Y. H. & Pedersen, L. H. (2012). Time series momentum. Journal of Financial Economics, 104(2), 228-250."
+  doi: "10.1016/j.jfineco.2011.11.003"
+  family: time-series (absolute) momentum / trend following
+  market: "58 liquid futures: equity indices, bonds, currencies, commodities"
+  sample_in_paper: "1985-2009"   # [verify]
+  long_short_in_paper: true
+  headline_finding: >
+    Each instrument's own past 12-month excess return predicts its next-month
+    return; the effect persists about a year and then partly reverses. A
+    diversified TSMOM portfolio earns substantial abnormal returns with little
+    exposure to standard factors and does best in extreme markets.
+  pipeline_fit: partial
+  pipeline_notes: >
+    Source trades futures, long if the 12-month excess return is positive and
+    short if negative, each position scaled to a constant ex-ante volatility
+    (40% per instrument is the commonly quoted figure [verify]). On a long-only
+    stock book the usable pieces are: (a) an absolute-momentum screen - hold only
+    stocks with positive trailing return (filters.require_positive_momentum);
+    (b) the same rule on your benchmark index as a market-timing overlay; (c)
+    volatility-scaled position sizing (weighting: inverse_vol).
+
+meta:
+  strategy_name: "lit-MOP2012-TSMOM"
+  authors: []
+  design_note: "Own-history trend: invest only where the trailing 12-month return is positive, sized by inverse volatility."
+  is_example: false
+
+signal:
+  components:
+    - kind: return
+      lookback_months: 12      # 1, 3, 6, 9, 12 tested; 12 is the main case
+      skip_months: 0
+      weight: 1.0
+  filters:
+    require_positive_momentum: true
+
+portfolio:
+  weighting: inverse_vol       # stands in for constant-volatility position scaling
+  holding_months: 1
+  rebalance: monthly
+
+# Not specified for an NSE setting: universe, sample, capital, benchmark, execution, costs, risk, stress, research.
+# Indian futures note: NSE stock and index futures exist, so a short leg is feasible
+# only for the F&O list - not for most small and micro caps.

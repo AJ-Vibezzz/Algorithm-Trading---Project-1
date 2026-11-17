@@ -1,0 +1,49 @@
+# =============================================================================
+# LITERATURE CONFIG 13 - Lee & Swaminathan (2000): price momentum and trading volume
+# Layout follows strategy_template.yaml; records the SOURCE, not your design.
+# null = source silent / not applicable. "[verify]" = check against original.
+# Window convention (as this pipeline reads it - src/momo/signals.py, _window):
+# lookback_months = months from the decision date back to the START of the window,
+# skip_months = months from the decision date back to its END. So "12-1"
+# momentum (returns of months t-12..t-2, decided at the end of t-1) = lookback 12, skip 1.
+# =============================================================================
+
+source:
+  citation: "Lee, C. M. C. & Swaminathan, B. (2000). Price Momentum and Trading Volume. Journal of Finance, 55(5), 2017-2069."
+  doi: "10.1111/0022-1082.00280"
+  family: cross-sectional momentum (volume-conditioned)
+  market: "US - NYSE and AMEX"    # [verify]
+  sample_in_paper: "1965-1995"    # [verify]
+  long_short_in_paper: true
+  headline_finding: >
+    Past turnover predicts both the size and the persistence of momentum:
+    high-volume winners and low-volume losers reverse faster, while low-volume
+    winners keep outperforming for longer. High-turnover firms behave like glamour
+    stocks, low-turnover firms like value stocks.
+  pipeline_fit: none
+  pipeline_notes: >
+    Turnover = shares traded / shares outstanding (average daily). JT-style J/K
+    portfolios double-sorted on past return and turnover. [verify grid]
+    No volume-conditioning option in the template. NSE bhavcopy gives traded
+    quantity but not shares outstanding, so turnover would need an external
+    shares-outstanding source. Indian test: Maheshwari & Dhankar (2017), file 31.
+
+meta:
+  strategy_name: "lit-LeeSwaminathan2000-Volume"
+  authors: []
+  design_note: "Prefer momentum winners with LOW past turnover."
+  is_example: false
+
+signal:
+  components:
+    - kind: return
+      lookback_months: 6       # [verify]; J in {3, 6, 9, 12}
+      skip_months: 0           # [verify]
+      weight: 1.0
+
+portfolio:
+  top_fraction: 0.10           # [verify]
+  weighting: equal             # [verify]
+  holding_months: 6            # [verify]
+
+# Everything else: not specified / not mappable - see pipeline_notes.

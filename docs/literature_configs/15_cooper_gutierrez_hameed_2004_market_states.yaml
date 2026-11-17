@@ -1,0 +1,55 @@
+# =============================================================================
+# LITERATURE CONFIG 15 - Cooper, Gutierrez & Hameed (2004): market states and momentum
+# Layout follows strategy_template.yaml; records the SOURCE, not your design.
+# null = source silent / not applicable. "[verify]" = check against original.
+# Window convention (as this pipeline reads it - src/momo/signals.py, _window):
+# lookback_months = months from the decision date back to the START of the window,
+# skip_months = months from the decision date back to its END. So "12-1"
+# momentum (returns of months t-12..t-2, decided at the end of t-1) = lookback 12, skip 1.
+# =============================================================================
+
+source:
+  citation: "Cooper, M. J., Gutierrez, R. C. & Hameed, A. (2004). Market States and Momentum. Journal of Finance, 59(3), 1345-1365."
+  doi: "10.1111/j.1540-6261.2004.00665.x"   # [verify]
+  family: conditional momentum (market-state timing)
+  market: "US stocks"
+  sample_in_paper: "1929-1995"   # [verify]
+  long_short_in_paper: true
+  headline_finding: >
+    Defining UP as a non-negative lagged three-year market return and DOWN as a
+    negative one, momentum profits with a six-month ranking period are clearly
+    positive after UP states and marginally negative after DOWN states.
+  pipeline_fit: partial
+  pipeline_notes: >
+    The template's regime_filter switches on an index's moving average, not on a
+    lagged 36-month return, so this is an approximation. A 36-month window also
+    reacts slowly. Indian evidence: Maheshwari & Dhankar (2018), "Market State and
+    Investment Strategies: Evidence from the Indian Stock Market", IIM Kozhikode
+    Society & Management Review, 7(2), 154-170 - they report that long-term
+    contrarian strategies were stronger after DOWN markets in India. [verify
+    their momentum-state findings]
+
+meta:
+  strategy_name: "lit-CGH2004-MarketState"
+  authors: []
+  design_note: "Hold momentum only when the market's trailing three-year return is non-negative."
+  is_example: false
+
+signal:
+  components:
+    - kind: return
+      lookback_months: 7       # six-month window ending one month back = lookback 7, skip 1
+      skip_months: 1           # [verify]
+      weight: 1.0
+
+portfolio:
+  holding_months: 6            # [verify]
+
+risk:
+  regime_filter:
+    enabled: true
+    index: null                # your market proxy
+    ma_days: null              # source uses a 36-month RETURN sign, not a moving average
+    exposure_when_below: null  # source implies near-zero momentum exposure in DOWN states; level is yours
+
+# Not specified for an NSE setting: universe, sample, capital, benchmark, execution, costs, stress, research.

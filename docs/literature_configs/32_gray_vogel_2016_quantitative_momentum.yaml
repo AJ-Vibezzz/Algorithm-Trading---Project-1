@@ -1,0 +1,52 @@
+# =============================================================================
+# LITERATURE CONFIG 32 - Gray & Vogel (2016): "Quantitative Momentum" (practitioner book)
+# Layout follows strategy_template.yaml; records the SOURCE, not your design.
+# null = source silent / not applicable. "[verify]" = check against original.
+# DETAILS ARE FROM MEMORY - verify every parameter in the book before citing.
+# =============================================================================
+# Window convention (as this pipeline reads it - src/momo/signals.py, _window):
+# lookback_months = months from the decision date back to the START of the window,
+# skip_months = months from the decision date back to its END. So "12-1"
+# momentum (returns of months t-12..t-2, decided at the end of t-1) = lookback 12, skip 1.
+
+source:
+  citation: "Gray, W. R. & Vogel, J. R. (2016). Quantitative Momentum: A Practitioner's Guide to Building a Momentum-Based Stock Selection System. Wiley."
+  doi: null
+  family: composite (12-1 momentum + frog-in-the-pan path filter + seasonality)
+  market: "US mid and large caps"   # [verify]
+  sample_in_paper: null             # [verify]
+  long_short_in_paper: false
+  headline_finding: >
+    A long-only, concentrated design: rank on 12-1 momentum, keep the top decile,
+    then keep the half with the smoothest path (the Da-Gurun-Warachka information
+    discreteness measure, file 10), and rebalance quarterly with timing chosen to
+    exploit window-dressing / tax seasonality. [verify every step]
+  pipeline_fit: full   # signal + ID filter + quarterly rebalance
+  pipeline_notes: >
+    Practitioner book, not peer-reviewed. Closest published analogue to a
+    long-only, cost-aware momentum book like yours - useful as a reference design,
+    but cite the underlying academic papers for the evidence.
+
+meta:
+  strategy_name: "lit-GrayVogel2016-QMOM"
+  authors: []
+  design_note: "Top-decile 12-1 winners with the smoothest paths, rebalanced quarterly."
+  is_example: false
+
+signal:
+  components:
+    - kind: return
+      lookback_months: 12      # [verify]   # window t-12..t-2 = lookback 12, skip 1
+      skip_months: 1           # [verify]
+      weight: 1.0
+  filters:
+    max_information_discreteness: null   # source keeps roughly the smoother half  [verify]
+
+portfolio:
+  selection: top_n
+  n_holdings: null             # roughly 50 in the book  [verify]
+  weighting: equal             # [verify]
+  holding_months: 3            # [verify]
+  rebalance: quarterly         # [verify]
+
+# Not specified for your mandate: universe, sample, capital, benchmark, execution, costs, risk, stress, research.

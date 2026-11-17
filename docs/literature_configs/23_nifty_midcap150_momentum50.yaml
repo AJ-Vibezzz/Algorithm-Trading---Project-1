@@ -1,0 +1,68 @@
+# =============================================================================
+# LITERATURE CONFIG 23 - NSE Indices: Nifty Midcap150 Momentum 50 (index methodology)
+# Layout follows strategy_template.yaml; records the SOURCE, not your design.
+# null = source silent / not applicable. "[verify]" = check against the current
+# NSE Indices methodology document.
+# Window convention (as this pipeline reads it - src/momo/signals.py, _window):
+# lookback_months = months from the decision date back to the START of the window,
+# skip_months = months from the decision date back to its END. So "12-1"
+# momentum (returns of months t-12..t-2, decided at the end of t-1) = lookback 12, skip 1.
+# =============================================================================
+
+source:
+  citation: "NSE Indices Ltd. Methodology Document for Equity Indices (Nifty Midcap150 Momentum 50 section); Nifty Midcap150 Momentum 50 whitepaper (Jan 2023) and factsheet; NSE Indices press release, 16 Aug 2022. niftyindices.com"
+  doi: null
+  family: risk-adjusted cross-sectional momentum (Indian index methodology)
+  market: "India - constituents of the Nifty Midcap 150 (mid caps)"
+  sample_in_paper: "Launched 16 August 2022; base date 1 April 2005 (pre-launch history back-calculated)"
+  long_short_in_paper: false
+  headline_finding: >
+    Same Normalised Momentum Score as the Nifty200 Momentum 30, applied to the
+    Midcap 150. NSE Indices' 2026 momentum whitepaper reports about 23.0% a year
+    since inception against about 17.2% for the Nifty Midcap 150 (to 27 Feb 2026).
+  pipeline_fit: partial
+  pipeline_notes: >
+    Directly in your segment. Score, z-scoring, the 1+Z / 1/(1-Z) transform, tilt
+    weighting (free-float mcap x score) and the 5% / 5x cap follow the Nifty200
+    Momentum 30 (file 22). The momentum whitepaper's methodology table lists extra
+    eligibility screens for the momentum indices - e.g. excluding the bottom 10%
+    by 6-month average turnover and stocks with promoter pledge above 20% - but
+    which screen applies to which index is not clear from the excerpt [verify].
+    Most of the reported out-performance is from the back-calculated period.
+
+meta:
+  strategy_name: "lit-NiftyMidcap150Momentum50"
+  authors: []
+  design_note: "Top 50 of the Midcap 150 on volatility-adjusted 6- and 12-month momentum; semi-annual."
+  is_example: false
+
+benchmark:
+  primary: "NIFTY MIDCAP 150"
+
+universe:
+  source: index_constituents
+  segments: [mid]
+  index_names: ["NIFTY MIDCAP 150"]
+
+signal:
+  components:
+    - kind: risk_adjusted_return
+      lookback_months: 6
+      skip_months: 0           # decided at the end of M-1 on prices up to M-1: no skip
+      weight: 0.5
+    - kind: risk_adjusted_return
+      lookback_months: 12
+      skip_months: 0           # decided at the end of M-1 on prices up to M-1: no skip
+      weight: 0.5
+  volatility_lookback_days: 252
+
+portfolio:
+  selection: top_n
+  n_holdings: 50
+  exit_rank_multiple: null     # a rank buffer exists; its size for this index [verify]
+  weighting: score             # closest option; source = free-float mcap x score
+  max_weight_per_stock: 0.05
+  holding_months: 6
+  rebalance: null              # semi-annual (June and December)
+
+# Not specified as a strategy for your mandate: sample, capital, execution, costs, risk, stress, research.

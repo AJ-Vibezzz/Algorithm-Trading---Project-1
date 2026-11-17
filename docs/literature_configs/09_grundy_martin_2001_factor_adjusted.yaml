@@ -1,0 +1,55 @@
+# =============================================================================
+# LITERATURE CONFIG 09 - Grundy & Martin (2001): factor exposures and stock-specific momentum
+# Layout follows strategy_template.yaml; records the SOURCE, not your design.
+# null = source silent / not applicable. "[verify]" = check against original.
+# MOST DETAILS IN THIS FILE ARE FROM MEMORY - verify everything before citing.
+# =============================================================================
+# Window convention (as this pipeline reads it - src/momo/signals.py, _window):
+# lookback_months = months from the decision date back to the START of the window,
+# skip_months = months from the decision date back to its END. So "12-1"
+# momentum (returns of months t-12..t-2, decided at the end of t-1) = lookback 12, skip 1.
+
+source:
+  citation: "Grundy, B. D. & Martin, J. S. (2001). Understanding the Nature of the Risks and the Source of the Rewards to Momentum Investing. Review of Financial Studies, 14(1), 29-78."   # [verify]
+  doi: "10.1093/rfs/14.1.29"   # [verify]
+  family: cross-sectional momentum (factor-adjusted)
+  market: "US stocks"          # [verify]
+  sample_in_paper: "1926-1995" # [verify]
+  long_short_in_paper: true
+  headline_finding: >
+    Momentum portfolios load dynamically on the market and size factors (their
+    beta flips with the sign of the market over the formation period). Hedging
+    those exposures, or ranking on stock-specific returns, improves performance
+    markedly. This is the paper Blitz-Huij-Martens (file 08) extends.  [verify]
+  pipeline_fit: partial
+  pipeline_notes: >
+    Two usable ideas: (1) rank on residual returns - see file 08; (2) cap the
+    portfolio's beta - risk.beta.max_portfolio_beta in the template is a direct
+    implementation of limiting the time-varying market exposure.
+
+meta:
+  strategy_name: "lit-GrundyMartin2001"
+  authors: []
+  design_note: "Momentum after removing time-varying factor exposure."
+  is_example: false
+
+signal:
+  components:
+    - kind: residual
+      lookback_months: 7       # six-month window ending one month back = lookback 7, skip 1  [verify]
+      skip_months: 1           # [verify]
+      weight: 1.0
+      residual_estimation_months: null   # [verify]
+
+portfolio:
+  selection: top_fraction
+  top_fraction: 0.10           # [verify]
+  weighting: equal             # [verify]
+  holding_months: 6            # [verify]
+  rebalance: monthly
+
+risk:
+  beta:
+    max_portfolio_beta: null   # the paper motivates a beta limit; the level is your decision
+
+# Not specified for an NSE setting: universe, sample, capital, benchmark, execution, costs, stress, research.

@@ -1,0 +1,51 @@
+# =============================================================================
+# LITERATURE CONFIG 02 - Carhart (1997): PR1YR momentum factor
+# Layout follows strategy_template.yaml; records the SOURCE, not your design.
+# null = source silent / not applicable. "[verify]" = check against original.
+# Window convention (as this pipeline reads it - src/momo/signals.py, _window):
+# lookback_months = months from the decision date back to the START of the window,
+# skip_months = months from the decision date back to its END. So "12-1"
+# momentum (returns of months t-12..t-2, decided at the end of t-1) = lookback 12, skip 1.
+# =============================================================================
+
+source:
+  citation: "Carhart, M. M. (1997). On Persistence in Mutual Fund Performance. Journal of Finance, 52(1), 57-82."   # vol/pages [verify]
+  doi: "10.1111/j.1540-6261.1997.tb03808.x"   # [verify]
+  family: cross-sectional price momentum (factor construction)
+  market: "US stocks (CRSP)"                   # [verify]
+  sample_in_paper: "1962-1993 (fund sample)"   # [verify]
+  long_short_in_paper: true
+  headline_finding: >
+    Adds a one-year momentum factor (PR1YR) to the Fama-French three factors; the
+    four-factor model explains most short-term persistence in mutual fund returns.
+  pipeline_fit: full   # long leg only
+  pipeline_notes: >
+    PR1YR = equal-weight average of firms with the highest 30% eleven-month returns
+    lagged one month, minus the lowest 30%, re-formed monthly. [verify]
+
+meta:
+  strategy_name: "lit-Carhart1997-PR1YR"
+  authors: []
+  design_note: "Top 30% by return from t-12 to t-2, equal weight, re-formed monthly."
+  is_example: false
+
+universe:
+  source: null
+  segments: null
+
+signal:
+  components:
+    - kind: return
+      lookback_months: 12      # eleven-month return ...   # window t-12..t-2 = lookback 12, skip 1
+      skip_months: 1           # ... lagged one month  [verify]
+      weight: 1.0
+
+portfolio:
+  selection: top_fraction
+  top_fraction: 0.30           # [verify]
+  exit_rank_multiple: 1.0
+  weighting: equal             # [verify]
+  holding_months: 1
+  rebalance: monthly
+
+# Not specified for an NSE setting: sample, capital, benchmark, execution, costs, risk, stress, research.

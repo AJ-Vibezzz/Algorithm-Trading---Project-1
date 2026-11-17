@@ -448,6 +448,9 @@ class StrategyConfig:
             out.append("portfolio.top_fraction")
         if not self.signal.components:
             out.append("signal.components (at least one)")
+        for i, c in enumerate(self.signal.components):
+            if c.kind == "residual" and c.residual_estimation_months is None:
+                out.append(f"signal.components.{i}.residual_estimation_months")
         r = self.risk
         if r.vol_target.enabled and r.vol_target.annual_vol is None:
             out.append("risk.vol_target.annual_vol")
@@ -527,7 +530,8 @@ class StrategyConfig:
             errs.append("portfolio.gross_exposure above 1 means leverage - not supported long-only")
         choice(self.costs.spread_model, ["corwin_schultz", "abdi_ranaldo", "fixed"], "costs.spread_model")
         for i, c in enumerate(s.components):
-            if c.kind == "residual" and c.lookback_months is not None and c.residual_estimation_months <= c.lookback_months:
+            if (c.kind == "residual" and c.lookback_months is not None and c.residual_estimation_months is not None
+                    and c.residual_estimation_months <= c.lookback_months):
                 errs.append(f"signal.components.{i}: residual_estimation_months must exceed lookback_months")
         choice(e.price, ["vwap", "open", "close"], "execution.price")
         between(e.participation_cap, 0, 1, "execution.participation_cap")

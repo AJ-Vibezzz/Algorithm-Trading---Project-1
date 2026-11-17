@@ -1,0 +1,54 @@
+# =============================================================================
+# LITERATURE CONFIG 19 - Antonacci (2012/2014): dual momentum
+# Layout follows strategy_template.yaml; records the SOURCE, not your design.
+# null = source silent / not applicable. "[verify]" = check against original.
+# Window convention (as this pipeline reads it - src/momo/signals.py, _window):
+# lookback_months = months from the decision date back to the START of the window,
+# skip_months = months from the decision date back to its END. So "12-1"
+# momentum (returns of months t-12..t-2, decided at the end of t-1) = lookback 12, skip 1.
+# =============================================================================
+
+source:
+  citation: "Antonacci, G. (2012). Risk Premia Harvesting Through Dual Momentum. Working paper, SSRN (NAAIM Wagner Award 2012). Book: Antonacci, G. (2014). Dual Momentum Investing: An Innovative Strategy for Higher Returns with Lower Risk. McGraw-Hill."
+  doi: null                    # cite the SSRN abstract page  [verify SSRN id]
+  family: dual momentum (relative + absolute)
+  market: "Asset-class indices: US/foreign equities, credit/high-yield bonds, equity/mortgage REITs, gold/Treasuries"
+  sample_in_paper: "January 1974 (or earliest available) - December 2011"
+  long_short_in_paper: false   # long-only, switches to T-bills
+  headline_finding: >
+    Picking the stronger asset of each pair on 12-month return (relative
+    momentum), but holding T-bills whenever that winner has not beaten T-bills
+    over the same 12 months (absolute momentum), cuts drawdowns while keeping
+    most of the return.
+  pipeline_fit: partial
+  pipeline_notes: >
+    Practitioner working paper and book, not a peer-reviewed journal article -
+    say so if you cite it. Asset-class level, 12-month lagged total return, no
+    skip month, monthly. On a stock book: rank stocks (relative), then
+    require_positive_momentum (absolute). The template's screen tests return > 0,
+    not return > T-bill return - note the difference. Indian test of the same
+    combination: Sehgal, Pandey & Sen (2024), file 30.
+
+meta:
+  strategy_name: "lit-Antonacci-DualMomentum"
+  authors: []
+  design_note: "Hold the relative winners only if they also beat cash over the past 12 months."
+  is_example: false
+
+signal:
+  components:
+    - kind: return
+      lookback_months: 12
+      skip_months: 0
+      weight: 1.0
+  filters:
+    require_positive_momentum: true
+
+portfolio:
+  holding_months: 1
+  rebalance: monthly
+
+capital:
+  cash_return: rf              # source parks failed positions in T-bills
+
+# Not specified for an NSE setting: universe, sample, benchmark, execution, costs, risk, stress, research.
