@@ -45,6 +45,24 @@ def _signature(spec: FixtureSpec) -> str:
     return hashlib.sha256(blob.encode()).hexdigest()[:16]
 
 
+_CONFIG = None  # the pytest config, so the slow first-run setup can talk past output capture
+
+
+def pytest_configure(config):
+    global _CONFIG
+    _CONFIG = config
+
+
+def _say(message: str) -> None:
+    """Print to the terminal even while pytest captures output (so a first run does not look frozen)."""
+    capman = _CONFIG.pluginmanager.getplugin("capturemanager") if _CONFIG else None
+    if capman is None:
+        print(message, flush=True)
+        return
+    with capman.global_and_fixture_disabled():
+        print("\n" + message, flush=True)
+
+
 def build_fixture(name: str, spec: FixtureSpec) -> Path:
     """Generate (or reuse) one synthetic data set and run it through the data layer."""
     root = CACHE / name
@@ -53,10 +71,7 @@ def build_fixture(name: str, spec: FixtureSpec) -> Path:
     if stamp.exists() and stamp.read_text() == sig:
         return root
     shutil.rmtree(root, ignore_errors=True)
-    # pytest hides normal output; write straight to the terminal so a first run does not look frozen
-    sys.__stderr__.write(f"\n[setup] building synthetic test data '{name}' - first run only, about 1-3 minutes, "
-                         "no output meanwhile ...\n")
-    sys.__stderr__.flush()
+    _say(f"[setup] building synthetic test data '{name}' - first run only, about 1-3 minutes, no output meanwhile ...")
     generate_fixture(root, spec)
     cfg = DataConfig(root=str(root), data_kind="synthetic")
     ingest(cfg, progress=False)
