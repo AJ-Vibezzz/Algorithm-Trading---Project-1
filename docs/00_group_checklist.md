@@ -48,6 +48,7 @@ Detailed checks for each step are in `docs/10_verification_checklist.md` (sectio
 - [ ] `python run.py train` - read the training pack in `results/train/`. Every run of your own config is
       logged in `results/research/trials.csv` (re-running unchanged settings is not counted twice).
 - [ ] `python run.py search` - compare your alternatives on the training period only; every run is logged.
+- [ ] Keep `docs/11_research_log.md`: the question and its basis before each run, the outcome after.
 - [ ] Choose, then `python run.py freeze`.
 - [ ] `python run.py test --strategy config/frozen_strategy.yaml` - **once**.
 - [ ] `python run.py full --strategy config/frozen_strategy.yaml` - for the stress tests.

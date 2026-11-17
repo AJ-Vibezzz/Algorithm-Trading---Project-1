@@ -102,6 +102,7 @@ docs/
   08_code_walkthrough.md      what each file does; self-test questions
   09_ic_qa_prep.md            questions to prepare for the committee
   10_verification_checklist.md
+  11_research_log.md          one row per training run: question, basis, outcome, decision
 notebooks/momentum_end_to_end.ipynb
 src/momo/                     the package (see docs/08_code_walkthrough.md)
 tests/                        automated tests, on synthetic data
