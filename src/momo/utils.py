@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 import pandas as pd
 
@@ -13,11 +15,17 @@ def to_ns(df: pd.DataFrame) -> pd.DataFrame:
     or microseconds; joins and as-of merges need both sides to match, so the
     pipeline standardises on nanoseconds at every boundary.
     """
-    for col in df.columns:
-        if pd.api.types.is_datetime64_any_dtype(df[col]):
-            if getattr(df[col].dt, "tz", None) is not None:
-                df[col] = df[col].dt.tz_localize(None)
-            df[col] = df[col].astype("datetime64[ns]")
+    # ``df`` is often a filtered slice; the cast is meant for that slice itself, so pandas 2.x's
+    # "setting on a copy" warning is a false alarm here (pandas 3 no longer has it).
+    copy_warning = getattr(pd.errors, "SettingWithCopyWarning", None)
+    with warnings.catch_warnings():
+        if copy_warning is not None:
+            warnings.simplefilter("ignore", copy_warning)
+        for col in df.columns:
+            if pd.api.types.is_datetime64_any_dtype(df[col]):
+                if getattr(df[col].dt, "tz", None) is not None:
+                    df[col] = df[col].dt.tz_localize(None)
+                df[col] = df[col].astype("datetime64[ns]")
     return df
 
 
