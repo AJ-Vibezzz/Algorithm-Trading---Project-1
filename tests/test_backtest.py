@@ -193,3 +193,14 @@ def test_hedge_overlay_reduces_market_beta(ws, cfg):
         return np.cov(r, mkt.reindex(r.index))[0, 1] / mkt.reindex(r.index).var()
     assert b.daily["hedge_notional"].max() > 0
     assert abs(beta(b)) < 0.5 * abs(beta(a))
+
+
+def test_an_index_the_data_does_not_have_is_reported_before_the_run(ws, cfg):
+    import pytest
+    from momo.config import ConfigError
+    from momo.pipeline import check_index_names
+    bad = cfg.with_overrides({"benchmark.primary": "NIFTY SMALLCAP 250 TRI"})
+    with pytest.raises(ConfigError, match="data/external/benchmarks") as err:
+        check_index_names(ws.md, bad)
+    assert "NIFTY SMALLCAP 250" in str(err.value), "the price index of the same name is suggested"
+    check_index_names(ws.md, cfg)  # the fixture's own names are all present

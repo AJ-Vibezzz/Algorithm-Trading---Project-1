@@ -101,6 +101,37 @@ def check_history(md: MarketData, cfg: StrategyConfig, rows: List[int]) -> None:
         )
 
 
+def check_index_names(md: MarketData, cfg: StrategyConfig) -> None:
+    """Fail early if the config names an index the data does not have (benchmarks, beta, regime, hedge)."""
+    wanted = [("benchmark.primary", cfg.benchmark.primary)]
+    wanted += [(f"benchmark.others.{i}", n) for i, n in enumerate(cfg.benchmark.others or [])]
+    wanted += [("risk.beta.benchmark", cfg.risk.beta.benchmark)]
+    if cfg.risk.regime_filter.enabled:
+        wanted.append(("risk.regime_filter.index", cfg.risk.regime_filter.index))
+    if cfg.risk.hedge.enabled:
+        wanted.append(("risk.hedge.index", cfg.risk.hedge.index))
+    have = set(md.indices.columns)
+    problems = []
+    for field_name, name in wanted:
+        if not name:
+            continue
+        key = str(name).strip().upper()
+        if key in ("UNIVERSE_CAP", "UNIVERSE_EQUAL") and field_name.startswith("benchmark"):
+            continue
+        if key not in have:
+            base = key[:-4].strip() if key.endswith(" TRI") else key
+            words = set(base.split()) - {"NIFTY", "INDEX", "TRI"}
+            scored = sorted(((len(words & set(n.split())), n) for n in have), key=lambda x: (-x[0], x[1]))
+            close = [n for k, n in scored if k >= max(1, len(words) - 1)][:5]
+            hint = (f" A '... TRI' series comes from a file you put in data/external/benchmarks/ "
+                    f"(docs/01_data_requirements.md, 2.3)." if key.endswith(" TRI") else "")
+            problems.append(f"{field_name} = '{name}' is not in the data.{hint}"
+                            + (f" Similar names: {close}" if close else ""))
+    if problems:
+        raise ConfigError("Index names not found (run `python run.py episodes` to list them all):\n  - "
+                          + "\n  - ".join(problems))
+
+
 def run_backtest(ws: Workspace, cfg: StrategyConfig, start, end,
                  options: Optional[RunOptions] = None, validate: bool = True) -> BacktestResult:
     """Run one back-test over [start, end]. Decisions are taken on period-ends inside the window."""
@@ -109,6 +140,7 @@ def run_backtest(ws: Workspace, cfg: StrategyConfig, start, end,
     md = ws.md
     rows = decision_rows(md, cfg, start, end)
     check_history(md, cfg, rows)
+    check_index_names(md, cfg)
     universe = ws.universe(cfg, rows)
     strategy = MomentumStrategy(md, cfg, universe)
     engine = Backtester(md, cfg, strategy, ws.schedule, rows, md.loc(end), options, ws.delisting_returns)
