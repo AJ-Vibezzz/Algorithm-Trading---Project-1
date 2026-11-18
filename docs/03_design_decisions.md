@@ -1,228 +1,190 @@
-# Design decisions: the choices that are yours
+# Design decisions — Slow Diffusion Residual Momentum
 
-The course rules say each group must design its own strategy and parameters, and that AI-generated analysis or recommendations may not be submitted as your own. This sheet is therefore a **menu, not a meal**. For every decision it gives:
+**How these decisions were made.** Every decision below was made by our group in a structured review with an AI assistant (Claude, 17–18 November 2026). The assistant explained the options, evidence and trade-offs; we chose. One exception is marked **[AI-suggested, adopted]**: the holdings count. All AI use is declared in the appendix. Before submission, rewrite every "Why" in your own words.
 
-- **What it controls** and the field in `config/strategy.yaml`;
-- **Options the code implements**;
-- **Evidence**: what the literature says, with references you can open (full citations in `02_literature_review.md`);
-- **Facts to look at** in your own data before deciding;
-- a blank **Our decision / Why**, to fill in yourselves.
+The full menu of options, evidence and facts behind each decision is in `docs/03_design_options.md`.
 
-Nothing below tells you which option to pick. Where the evidence points two ways, both sides are stated. Your reasons, written here, become the "strategy design and economic rationale" section of the report and your answers in Q&A.
+**Objective.** A consistent return generator for a closely held ₹50 crore fund (family, friends and known associates).
 
-**Order of work.** Decide the items marked **[before data]** first (they fix what you download), then use the training period to inform the rest. Every parameter value you compare on the training data is logged by `python run.py search`, so keep the comparisons few and motivated.
+**Economic rationale (the edge).** Slow information diffusion (Hong, Lim & Stein 2000). Indian mid and small caps get little analyst and retail attention, so firm-specific news reaches their prices over months rather than days. *To add: one sourced figure on analyst coverage of Indian small caps.*
 
 ---
 
-## D1. Sample period and the train/test split  **[before data]**
+## D1. Sample period and split
 
-**Controls:** `sample.train_start`, `train_end`, `test_start`, `test_end`; `download_start` in `config/data.yaml`.
+**Our decision:** Training runs from February 2012, the first date the 24-month residual signal exists, to December 2016 (58 monthly decisions, 29 Feb 2012 – 30 Nov 2016). The test runs from January 2017 to October 2026 (117 decisions, Jan 2017 – Sep 2026).
 
-**What the brief requires:** fix parameters on a training period, report the untouched test period separately, and say how many combinations you tried.
+**Why:** We compare only four settings on training data, so this period is enough to choose on, and it already contains two small-cap falls (2013 and 2015–16). A ten-year test gives the most convincing out-of-sample record and keeps every episode the brief names unseen. It also spans both the pre- and post-2020 retail regimes, which lets us test our prediction that momentum weakens after the retail boom: compare 2017–19 with 2020–26 inside the test.
 
-**Things to weigh**
-- The data must start a full signal look-back (plus your minimum listing age) before `train_start`.
-- A longer training period gives more market regimes to learn from; a longer test period gives a more convincing out-of-sample result. You cannot have both.
-- Which period contains the stress episodes you want to discuss? An episode in the training period has shaped your choices; one in the test period has not.
-- **What the real archive holds (checked on the files for 2010-2026):** prices and corporate actions from 2010; index levels from February 2012; ISINs in the price file from 22 June 2011; the exchange's market-cap lists from 31 March 2019 (ranks only) and 31 March 2020 (values); the daily market-cap file only from January 2024. Before April 2019 no exchange measure of market cap exists in the public archive, so a sample starting earlier must rank size by traded value (or by AMFI lists you obtain) for those years. Run `python run.py sizecheck` and look at `data/processed/quality/by_year.csv` (columns `share_rows_mcap_from_*`) before you choose.
-- Expect weaker results out of sample: McLean & Pontiff (2016) document this for published anomalies generally.
+## D2. Fund size
 
-**Our decision:** ______________________  **Why:** ______________________
+**Our decision:** ₹50 crore, a closely held fund for family, friends and known associates. In practice this would be a [PMS / Category III AIF]; check the current SEBI minimums.
 
-## D2. Fund size  **[before data]**
-
-**Controls:** `capital.initial_capital_inr`; `research.capacity_aum_inr` for the capacity sweep.
-
-Fund size is not a detail: it sets how large each order is relative to daily volume, and therefore how often the liquidity cap binds and how much market impact you pay (the impact term grows with the square root of order size over volume).
-
-**Facts to look at:** `python run.py liquidity` prints, for each size segment at each year-end, the spread of typical daily traded value. Compare a typical position (fund size x weight per stock) with `participation_cap x` that traded value.
-
-**Evidence:** Korajczyk & Sadka (2004) show momentum profits survive only up to a finite fund size; Frazzini, Israel & Moskowitz (2018) find lower costs for a large manager in liquid markets.
-
-**Our decision:** ______________________  **Why:** ______________________
+**Why:** This is the realistic size of the mandate we are pitching. At this size, a full position (₹1.67 crore) in the median eligible small cap took about 7 trading days to build in 2012 and 9 in 2013, but under half a day by 2024–26; mid caps took about 2 days early on and under 1 later. Capacity is therefore mainly a training-period constraint. The capacity sweep (₹50 cr to ₹1,000 cr) shows where returns begin to erode (Korajczyk & Sadka 2004).
 
 ## D3. Benchmark
 
-**Controls:** `benchmark.primary`, `benchmark.others`.
+**Our decision:** Nifty Midsmallcap 400 TRI as the primary benchmark, and the equal-weight eligible universe as the second.
 
-**Options:** any index in the NSE index file (`python run.py episodes` lists the names), a total-return series you supply (`data/external/benchmarks/`), or the eligible universe itself (`UNIVERSE_CAP`, `UNIVERSE_EQUAL`).
-
-**Things to weigh**
-- The exchange file carries *price* indices; your strategy earns dividends. A total-return index is the fair comparison. If you use a price index, say so.
-- The universe benchmark holds the same stocks without the signal, so it isolates stock selection; but it is gross of costs.
-- An investment committee will ask "why not buy a momentum index fund instead?" Decide whether a Nifty momentum index belongs among your benchmarks.
-
-**Our decision:** ______________________  **Why:** ______________________
+**Why:** The index covers the same ranks (101–500) as our universe, so beating it means our selection added value. The total-return version includes dividends, as our strategy does. The equal-weight universe holds the same stocks without the signal, which isolates the signal's contribution.
 
 ## D4. Universe and filters
 
-**Controls:** `universe.*`.
+**Segments:** Ranks 101–500 (mid and small caps), matching the Nifty Midsmallcap 400.
 
-**Options:** `source: mcap_rank` (rebuild segments from a size ranking on each date) or `index_constituents` (your own point-in-time membership file); any subset of mid / small / micro; filters on listing age, price, liquidity, share of days traded, share of days at a price band, surveillance status.
+**Why:** Both mid and small caps receive little analyst and retail attention, so news reaches their prices slowly. Micro caps are excluded because, without surveillance data, we cannot separate information-driven moves from manipulation. About 400 stocks give the ranking enough breadth. Because low retail participation contributed to slow diffusion, we expect momentum to weaken after the post-2020 retail boom. *To add: a sourced figure on demat account growth.*
 
-**Size measure (`universe.size_metrics`, `universe.large_cap_indices`).** Which measures you accept, and in which order, decides what "small cap" means in each year of your sample. Facts to weigh: `python run.py sizecheck` prints when each measure exists and, on dates where two exist, their rank correlation and how many stocks land in the same segment under both - that tells you how good traded value is as a stand-in for market cap in your data. The monthly Nifty 50 / Next 50 member lists (2008 onwards) can fix the top 100 whatever the measure. AMFI's half-yearly lists (from 2018) are the categorisation SEBI uses for fund mandates; they are not on the exchange archive and would have to be downloaded by you from amfiindia.com into `data/external/amfi/`.
+**Size measure:** Market cap where it exists (April 2019 onwards), traded value before that, with the top 100 fixed from the Nifty 50 and Nifty Next 50 lists.
 
-**Our decision on the size measure:** ______________________  **Why:** ______________________
+**Why:** Attention, and so the speed of diffusion, is closely linked to size, because analyst coverage follows size. Before 2019 the archive has no market-cap data, so traded value stands in. Training and test therefore pick stocks by different rules: in the overlap the two rankings agree on only 42–54% of small caps. We report a robustness run that ranks by traded value throughout.
 
-**Conventions (facts):** SEBI defines large cap as ranks 1-100, mid cap 101-250 and small cap 251 onwards by full market capitalisation. NSE's Smallcap 250 and Microcap 250 indices cover ranks 251-500 and the next 250.
+**Liquidity floor:** A median daily traded value of ₹1.1 crore over six months.
 
-**Evidence**
-- Momentum is stronger in smaller and less-covered firms (Hong, Lim & Stein 2000; Zhang 2006), which is the case for going down the size ladder.
-- Those are also the stocks that are costly to trade (Lesmond, Schill & Zhou 2004), which is the case against.
-- Israel & Moskowitz (2013) find no reliable relation between momentum profits and size.
+**Why:** The floor is derived rather than chosen. A full position (₹50 cr ÷ 30) must be fillable within 15 days at a 10% participation cap. In 2012–13 this excludes most small caps (about 195 eligible stocks in 2012 and 168 in 2013, against about 350 later), so the early book leans towards mid caps.
 
-**Indian frictions the filters address:** trade-for-trade series (BE/BZ) and surveillance lists restrict trading; narrow price bands lock stocks at a limit; low-priced stocks have a wide spread in percentage terms because the tick is fixed in paise.
+**Other filters:**
 
-**Facts to look at:** `python run.py liquidity`; the per-date counts in `results/train/tables/10_universe_by_date.csv` (how many stocks each filter removes); `10_blocked_screening.csv` (how many top-ranked signals each filter removed).
+- At least two years of listing, which the residual signal needs anyway.
+- A minimum price of ₹20 (a penny-stock screen).
+- Traded on at least 90% of days.
+- Out if locked at a price band on more than 10% of the last 60 days.
+- EQ series only. This is the only surveillance screen in effect, because no ASM/GSM list is available.
 
-**Our decision:** ______________________  **Why:** ______________________
+## D5. Signal
 
-## D5. The momentum signal
+**Our decision:** Market-residual momentum. Each stock's daily returns are regressed on the market return over the 24 months ending on the decision date. Its score in each window is the sum of residuals divided by (their standard deviation × √days), a t-statistic, so the signal is scaled by residual volatility. Two windows are equally weighted: months 12 to 2 and months 7 to 2 before the decision, skipping the most recent month. Only stocks whose own total return over months 12 to 2 is positive are eligible, and an information-discreteness filter with cutoff 0 (same window, raw daily returns) is applied to them. No volatility filter.
 
-**Controls:** `signal.components` (kind, look-back, skip, weight) and `signal.filters`.
+**Why:**
 
-| Option | Idea | Reference |
-|---|---|---|
-| `return`, look-back J, skip S | cumulative total return from J months ago to S months ago | Jegadeesh & Titman (1993) |
-| skip the latest month | avoids one-month reversal | Jegadeesh (1990); Lehmann (1990) |
-| longer skip | momentum may come mainly from months 12 to 7 | Novy-Marx (2012) |
-| `risk_adjusted_return` | return divided by volatility | NSE Indices momentum methodology |
-| `residual` | momentum in market-residual returns; lower volatility, steadier factor exposure | Blitz, Huij & Martens (2011) |
-| `high_52w` | nearness to the highest price in the window | George & Hwang (2004) |
-| several components | average of z-scores, e.g. two look-backs | NSE Indices methodology combines 6 and 12 months |
-| `require_positive_momentum` | hold only stocks with positive absolute momentum | Moskowitz, Ooi & Pedersen (2012) |
-| `max_information_discreteness` | prefer momentum built from many small moves | Da, Gurun & Warachka (2014) |
-| `max_volatility_percentile` | drop the most volatile stocks | a design choice; test it |
+- **Residual returns.** The residual removes the part of a stock's return driven by the market, leaving the firm-specific drift that slow diffusion predicts (Blitz, Huij & Martens 2011).
+- **24-month estimation.** In mid and small caps most return variation is stock-specific: in our universe the market explains a median 11–24% of a stock's daily variation, depending on the year (75th percentile 19–36%). A shorter window therefore costs little precision. It also keeps 2012 in training and lets the strategy trade a new listing after two years rather than three. A 36-month version is reported as a robustness check.
+- **Two windows.** News from the past six months is only partly reflected in prices, while older news has largely diffused. The blend therefore gives recent drift more weight while keeping a full year of evidence, as NSE's momentum indices do with 6 and 12 months.
+- **Skipping the latest month.** Very short-term returns tend to reverse (Jegadeesh 1990).
+- **Positive raw return required.** Residual momentum can rank a stock highly just because it fell less than the market, and a long-only fund for family investors should own stocks that are actually rising. The screen also makes the smoothness filter work as intended: the discreteness measure flips sign for stocks with a negative raw return, and without the screen the filter doubled the number of steady decliners in the top 30 in weak years (2012, 2019). Combining relative and absolute strength also beats plain price momentum in India (Sehgal, Pandey & Sen 2024). Cost: in weak markets fewer than 30 stocks may qualify. The fund then stays fully invested in fewer, larger positions, because weights are rescaled to 100% across the names that qualify. The fewest candidates on any date in our data is 22 (about 4.5% each); the 6% cap holds as long as at least 17 names qualify.
+- **Smoothness filter.** We want winners whose rise came from a steady flow of news. Momentum concentrates in stocks with continuous information (Da, Gurun & Warachka 2014). A cutoff of 0 removes only winners that fell on more days than they rose, typically band jumps or one-off announcements.
+- **No volatility filter.** Excluding volatile stocks would remove strong momentum names (Zhang 2006), so volatility is handled through position sizing instead.
+- **Limitation.** The market return used in the residual regression changes source twice: traded-value-weighted until Feb 2012, the Nifty 500 price index until Apr 2020, and cap-weighted after that.
 
-**Things to weigh**
-- A shorter look-back reacts faster and trades more; costs rise with turnover.
-- `residual` needs a long history (set by `residual_estimation_months`), which excludes recent listings.
-- State the *economic reason* your chosen signal should work in Indian small caps (section 2 of the literature digest lists the candidate mechanisms). A signal chosen only because it had the best back-test is the weakest possible answer.
-- Each extra option you compare is another trial.
+## D6. Holdings and sell rule
 
-**Our decision:** ______________________  **Why:** ______________________
+**Our decision:** 30 stocks **[AI-suggested, adopted]**, compared with 40 on training data. A sell buffer of 1.5.
 
-## D6. How many stocks, and when to sell
+**Why:**
 
-**Controls:** `portfolio.selection`, `n_holdings` / `top_fraction`, `exit_rank_multiple`.
+- **30 stocks.** A closely held fund needs single-stock losses its investors can tolerate: a 50% fall in one name costs about 1.7% of the fund. It also needs a portfolio they can follow, while staying concentrated enough to express the signal. That is about 9% of the eligible universe in later years, but 15–18% in 2012–13. Forty is tested to see whether broader diversification and smaller positions (₹1.25 crore, so faster fills) beat concentration. The liquidity floor stays at ₹1.1 crore in both runs, so they compare the same universe.
+- **Buffer of 1.5.** A stock slipping a few ranks may still be drifting, so we hold it until it falls below rank 45 rather than selling at once. Banding is the most effective way to cut momentum turnover (Novy-Marx & Velikov 2019). It mirrors NSE's 30-stock momentum index [verify the index buffer].
 
-**Things to weigh**
-- Fewer names: a purer signal, more stock-specific risk, larger positions relative to volume.
-- More names: diversification, a diluted signal, more small trades.
-- The exit buffer (`exit_rank_multiple` above 1) keeps a holding until it has fallen well down the ranking. Novy-Marx & Velikov (2019) find this "banding" the most effective way to cut costs; the price is holding stocks whose signal has faded.
+## D7. Position sizing
 
-**Facts to look at:** in the training pack, `07_turnover.csv`, `08_costs_by_component.csv`, `09_trade_stats.csv`.
+**Our decision:** Inverse-volatility weights over six months, a 6% maximum per stock, and no sector limit.
 
-**Our decision:** ______________________  **Why:** ______________________
+**Why:**
 
-## D7. Position sizing and concentration limits
+- **Inverse volatility.** We keep volatile stocks but hold less of them, so each stock contributes a similar amount of risk.
+- **6% cap.** It lets the steadiest climbers, where gradual diffusion is clearest, carry more of the book than NSE's 5% would. Only the least volatile names reach the cap, which keeps single-stock losses acceptable.
+- **No sector limit.** 2,520 of 3,267 companies have no sector label, so a sector cap would bind only on a minority. Sector concentration is reported, not limited.
+- **Side effects to state.** The early book tilts further towards mid caps. Volatility enters twice: the residual score is divided by residual volatility, and the weights use inverse total volatility. Both push towards steadier stocks.
 
-**Controls:** `portfolio.weighting`, `max_weight_per_stock`, `max_weight_per_sector`; optional `risk.beta.max_portfolio_beta` (a factor limit).
+## D8. Rebalancing, holding period and cash
 
-| Option | Property | Reference |
-|---|---|---|
-| `equal` | simple; no estimation error; trades small stocks as hard as large ones | DeMiguel, Garlappi & Uppal (2009) |
-| `inverse_vol` | equalises risk roughly; tilts to low-volatility names | volatility-scaling literature |
-| `score` | more weight to stronger signals; more concentration | a design choice |
-| `min_variance` | lowest estimated portfolio variance (Ledoit-Wolf covariance); depends on a noisy estimate | Ledoit & Wolf (2004) |
+**Our decision:** Monthly review with a 0.5% no-trade band, compared with a quarterly review on training data. A single portfolio, with no overlapping tranches. A 1% cash buffer.
 
-**Things to weigh**
-- Momentum portfolios concentrate in whichever sectors have been rising (Moskowitz & Grinblatt 1999). A sector limit trades some return for diversification; `10_blocked_screening.csv` shows how many signals it blocks.
-- Weights drift between rebalances, so a position can exceed its cap on the way up. `14_limit_breach_summary.csv` reports how often; your risk policy should say what tolerance is acceptable.
+**Why:** Our objective is a consistent return generator, so we trade only when the portfolio has drifted meaningfully from target. Each month we review the ranking but adjust only positions more than 0.5 percentage points (₹25 lakh) away from their target weight. Holdings are kept until they fall below rank 45, so both buying and selling are threshold-driven rather than calendar-driven. The pipeline cannot trigger a rebalance between monthly reviews, which we state as a limitation. Quarterly review is tested because theory does not settle whether the extra responsiveness is worth its cost. A single portfolio keeps the holdings readable for our investors. The 1% cash buffer covers trading costs and price moves while orders are worked over several days; the fund is otherwise fully invested (exposure is 99% of whatever the risk layers allow), so a larger buffer would be a permanent drag. Idle cash earns the T-bill rate.
 
-**Our decision:** ______________________  **Why:** ______________________
+## D9. Execution
 
-## D8. Holding period, rebalancing and cash
+**Our decision:** Trade at the next day's VWAP, at most 10% of 20-day average traded value and of that day's actual volume. Buy orders are worked for up to 15 days, and buys at upper circuits and sells at lower circuits are blocked.
 
-**Controls:** `portfolio.holding_months`, `rebalance`, `no_trade_band`, `cash_buffer`.
+**Why:**
 
-- `holding_months: K` above 1 runs K overlapping portfolios, each held for K rebalances, as in Jegadeesh & Titman (1993). It smooths turnover and timing luck.
-- Rebalancing less often lowers costs but, by itself, tends to lose as much in return (Novy-Marx & Velikov 2019).
-- The cash buffer pays costs and absorbs price moves between decision and execution; it also drags on return.
+- **VWAP.** Our orders are built patiently over several days, which is what VWAP represents.
+- **10% cap.** It follows the brief and keeps our footprint small in thin stocks.
+- **Day's actual volume.** Capping at it prevents trades that could not have been executed on a quiet day.
+- **15-day window.** Our edge plays out over months, so a slow build loses little of it. A full position in the median eligible small cap needed about 7–9 days in 2012–13 and under half a day by 2024–26. The 15-day limit covers the thinner eligible stocks.
+- **Circuit blocks.** A stock locked at its price band cannot be traded in reality.
 
-**Our decision:** ______________________  **Why:** ______________________
+## D10. Costs
 
-## D9. Execution and liquidity limits
+**Our decision:** Brokerage of 10 bps per side. Spreads from the Abdi–Ranaldo estimator (21-day average, half-spread capped at 2.5%). Market impact from the square-root rule with k = 1.0, plus robustness runs at k = 0.5 and k = 2.0.
 
-**Controls:** `execution.*`.
+**Why:**
 
-**What the brief requires:** decide on day t, trade on day t+1; cap each trade at a stated share of average daily traded value (it suggests 10% of 20-day ADV); report how many signals the limits blocked.
+- **Brokerage.** SEBI capped the brokerage mutual funds may pay on cash-market trades at 12 bps for most of our sample, and cut it to 6 bps in December 2025 [confirm the final figure in the notified regulation]. A ₹50 crore fund has less bargaining power than a large fund house, so we assume a rate between the old and new caps.
+- **Spread.** Our data has no bid–ask quotes, so the spread must be inferred from daily prices. Abdi & Ranaldo (2017) show their estimator is more accurate than Corwin–Schultz and rarely gives impossible negative values in thinly traded stocks. On days a stock is locked at its band both estimators read zero, but our circuit rule blocks trading on those days.
+- **Impact.** Published estimates put k near 1 (Almgren et al. 2005; Tóth et al. 2011), but they come from large, liquid markets. No reliable figure exists for Indian small caps, so rather than claim precision we show results at half and double the base.
 
-**Options:** execution at the next day's VWAP, open or close; the participation cap; whether the cap also applies to the day's actual volume; how many days a buy order is worked before it lapses (sell orders are always worked until done).
+## D11. Risk framework
 
-**Things to weigh**
-- VWAP is what a patient order spread over the day would achieve; the open is the first price after the decision; the close gives the market a full day to move.
-- A tighter cap means less impact and more unfilled orders; a looser cap means the reverse. `10_blocked_orders.csv` and `10_blocked_execution.csv` show the effect.
+**How the layers combine.** Each month, exposure = 99% × the smallest of four limits: the volatility target, the VaR limit, the ES limit and the drawdown tier. They do not multiply. Volatility, VaR and ES are recalculated at the monthly decision; the drawdown tiers are checked daily and can cut exposure between decisions.
 
-**Our decision:** ______________________  **Why:** ______________________
+**Volatility targeting:** On. The target is 16.78% a year, the Nifty Midsmallcap 400 TRI's annualised volatility over February 2012 – December 2016, with volatility measured over six months. This layer alone allows exposure between 50% and 100%.
 
-## D10. Cost assumptions
+**Why:** Our objective is a consistent return generator. Targeting the benchmark's own long-run volatility follows the convention of matching the strategy's average risk (Moreira & Muir 2017), so only the timing of exposure changes. Volatility alone never cuts exposure below half, so the fund takes part in the sharp rebounds after panics, where momentum strategies have historically lost most by being out (Daniel & Moskowitz 2016). Because the smallest limit wins, overall exposure can still fall to 25% at the hard drawdown tier, or lower if a VaR or ES limit binds harder. We note the counter-evidence of Cederburg et al. (2020).
 
-**Controls:** `costs.*`. (Statutory charges are facts in `config/statutory_charges.yaml`; verify them, do not choose them.)
+**VaR and ES:** 99% one-day historical VaR over 500 days, limit 4.5% of NAV. 97.5% ES, limit 6%. Exposure is scaled down automatically to fit.
 
-- **Brokerage:** what would this fund actually pay? Find a rate card or an institutional quote and cite it.
-- **Spread:** `corwin_schultz` or `abdi_ranaldo` estimate each stock's spread from its own daily prices; `fixed` applies one number to all. Abdi & Ranaldo (2017) argue their estimator is more reliable in thin stocks.
-- **Impact coefficient k:** in `impact = k x daily volatility x sqrt(order / ADV)`. Published estimates come mostly from large, liquid markets (Almgren et al. 2005; Toth et al. 2011; the Grinold-Kahn rule of thumb corresponds to k near 1). Whether Indian small caps deserve a higher or lower figure is for you to argue. Showing results for a low and a high k is one way to be honest about the uncertainty.
+**Why:** These are hard backstops for when volatility jumps faster than the six-month measure reacts. At our 16.8% volatility target a typical 99% one-day VaR is roughly 2.5–3.5%, allowing for fat tails, so the limits should bind rarely, and we report how often they did. ES is included because it measures the tail beyond VaR (Acerbi & Tasche 2002).
 
-**Facts to look at:** `08_costs_by_component.csv`, `06_paper_gross_net.csv`, the capacity table.
+**Drawdown tiers:** At 15% below the high-water mark, exposure is halved, and restored once the drawdown recovers to 10%. At 25%, exposure falls to 25% for at least 42 trading days.
 
-**Our decision:** ______________________  **Why:** ______________________
+**Why:** Drawdown is the risk our investors feel most directly, and our data contains a 60% small-cap fall (2018–20). The tiers cap the damage in a prolonged slide. They never go fully to cash, because momentum's worst losses come in sharp rebounds. The gap between the 15% trigger and the 10% release stops exposure flipping back and forth.
 
-## D11. Risk limits and overlays
+**Other settings:**
 
-**Controls:** `risk.*`. Write the policy itself in `05_risk_policy_template.md`.
+- At least 90% of the book must be sellable within 15 days at our participation cap. This is monitored: on a breach, the manager trims the least liquid positions at the next rebalance.
+- Policy rule, not simulated in the back-test: any position that drifts above 9% (1.5 × the cap) between monthly reviews is trimmed by the manager. The back-test only changes positions at monthly reviews and when a drawdown tier cuts exposure. How often a position actually exceeded 9% is counted from the daily weights in `logs/positions.csv`; `14_limit_breach_summary.csv` counts days above the 6% cap.
+- No per-stock stop-loss, market-timing filter, beta cap or futures hedge.
 
-| Element | Options | Evidence |
-|---|---|---|
-| VaR and ES limits | confidence, look-back, method; `scale` (cut exposure to fit) or `flag` (report only) | ES is the coherent measure (Artzner et al. 1999; Acerbi & Tasche 2002) |
-| Volatility target | off, or a target annual volatility | for: Barroso & Santa-Clara (2015), Moreira & Muir (2017); against: Cederburg et al. (2020) |
-| Drawdown tiers | soft and hard limits, exposure at each, cooling-off period | a policy choice; test its cost on training data |
-| Per-stock stop-loss | off, trailing or from entry, threshold, cool-down | for: Han, Zhou & Zhu (working paper); conditions: Kaminski & Lo (2014) |
-| Regime switch | off, or cut exposure when an index is below its moving average | Cooper, Gutierrez & Hameed (2004); Daniel & Moskowitz (2016) |
-| Beta cap | off, or a maximum portfolio beta | Grundy & Martin (2001) |
-| Index-futures hedge | off, or hedge a share of beta | turns the book towards market-neutral; costs margin and carry |
-| Liquidity limit | minimum share of the book sellable within N days | monitored; decide the action |
+**Why:** The liquidity standard matches the 15-day window we use to build positions, while the liquidity stress test covers a crisis exit. Stop-losses and timing filters would duplicate protection already given by the sell buffer, the positive-momentum screen, volatility targeting and the drawdown tiers, and would add parameters. The residual signal already removes market exposure from the ranking, so beta is reported rather than limited. The mandate is long-only. Breaches are acted on by the fund manager within one trading day and reported to investors in the monthly update.
 
-**Things to weigh**
-- Every overlay that sells after losses protects against a crash that continues and hurts in one that reverses. Daniel & Moskowitz (2016) show momentum's worst episodes are sharp rebounds.
-- Limits that are never reached constrain nothing; limits breached weekly are not limits. `13_var_backtest_summary.csv` and `14_limit_breach_summary.csv` show how yours behave.
-- Who decides what when a limit is breached is part of the policy, not of the code.
+## D12. Delisting
 
-**Our decision:** ______________________  **Why:** ______________________
+**Our decision:** A holding with no trade for 42 trading days is written off at −30%, unless its real outcome is known and entered in `delistings.csv`.
 
-## D12. Delisting and suspension
-
-**Controls:** `risk.delisting_return`, `risk.max_stale_days`; optional `data/external/delistings.csv`.
-
-A holding that stops trading cannot be sold. The engine carries it at its last price and, after `max_stale_days`, writes it off at `delisting_return` (or at the stock-specific outcome in your `delistings.csv`).
-
-**Evidence:** Shumway (1997) finds that ignoring delisting outcomes biases returns upward, and that performance-related delistings lose about 30% on average in US data. Outcomes differ by cause: a merger paid in shares loses little; an insolvency can lose everything.
-
-**Facts to look at:** `data/processed/quality/exits.csv` lists every company that stopped trading, with its last price and return over its final six months. `15_writeoffs.csv` in a report pack lists the ones your strategy actually held.
-
-**Our decision:** ______________________  **Why:** ______________________
+**Why:** Performance-related delistings lose about 30% on average (Shumway 1997), though outcomes range from small losses in share-swap mergers to total loss in insolvency. Our filters (positive momentum, liquidity, two-year listing) make holding a delisting company unlikely; `15_writeoffs.csv` lists any that occurred.
 
 ## D13. Stress tests
 
-**Controls:** `stress.windows`, `market_shocks`, `adv_haircuts`, `spread_multipliers`.
+**Our decision:**
 
-The brief suggests March 2020, the 2018 small-cap correction and a momentum crash. Date the episodes from data rather than from memory:
+- Historical windows: every small-cap fall of 25% or more in our data (2013, 2015–16, 2018–20, 2022 and 2024–25), the 2020 Covid crash, and the Covid rebound as the momentum-crash episode.
+- Instant market shocks: −10%, −20% and −30%.
+- Volume cuts: 50% and 75%.
+- Spread widening: 2× and 3×.
 
-```bash
-python run.py episodes --index "NIFTY SMALLCAP 250" --min-depth 0.15
-```
+**Why:** Episodes are dated from our data with `run.py episodes`, not from memory. The windows run from the start of the peak month to the end of the trough month. The 2018–20 fall runs into Covid, so Covid is also shown on its own. The rebound tests the mechanism behind momentum crashes, in which past losers rally (Daniel & Moskowitz 2016); its end date is taken from `18_momentum_factor_worst_periods.csv` [fill after train]. A 75% volume cut divides traded value by four, roughly the liquidity of 2020–21; returning to pre-2016 levels would need a cut of about 90%.
 
-lists every fall of that size with its peak, trough and recovery dates. For a momentum crash, the report pack's `18_momentum_factor_worst_periods.csv` lists the worst months and quarters of the momentum factor in your sample, with what your strategy and benchmark did in each.
+## D14. What the training data decides
 
-**Our decision:** ______________________  **Why:** ______________________
+**Our decision:** Four runs: 30 vs 40 holdings × monthly vs quarterly review, ranked by Sharpe ratio net of costs, with Calmar also reported. We prefer a setting whose neighbours in the grid also perform well over an isolated best.
 
-## D14. What to compare on the training data
+**Why:** Everything else follows from our economic argument and our investors' needs, which keeps the trial count small. Testing more settings would make the training winner look better through luck alone, and the deflated Sharpe ratio penalises it (Bailey & López de Prado 2014). These two settings turn on costs, which theory cannot settle. Sharpe matches our objective of consistent returns; Calmar (return ÷ worst drawdown) is what our investors feel.
 
-**Controls:** `research.grid`, `research.selection_metric`.
+**Trial count to report:** the 8 runs of our earlier "Smooth Mid-Small" design remain in `trials.csv`. The total at freeze is 8, plus every run of this design, plus any calibration runs. We report the full total.
 
-- List only the alternatives you have a reason to compare.
-- `python run.py search` logs every combination; the count goes into the report and into the deflated Sharpe ratio (Bailey & Lopez de Prado 2014), which falls as the count rises.
-- Prefer a setting whose neighbours perform similarly over an isolated best (the search writes a heat-map for the first two grid parameters).
-- When the design is final: `python run.py freeze`, then, once, `python run.py test`.
+**Robustness runs, reported but not used for selection:**
 
-**Our decision:** ______________________  **Why:** ______________________
+- traded-value ranking throughout
+- 36-month beta estimation
+- impact k = 0.5 and k = 2.0
+- the capacity sweep from ₹50 crore to ₹1,000 crore
+
+---
+
+## Still to do
+
+- **Before `train`:** `git pull` (for the positive-momentum screen fix); add both names under `authors`; run `python run.py check`.
+- **After `train` and `search`:** read `10_universe_by_date.csv`; fill the momentum-crash end date (D13) from `18_momentum_factor_worst_periods.csv`; add a row per run to `docs/11_research_log.md`.
+- **Before `freeze`:** verify the six statutory charges; fill the sourced figures marked *To add* (analyst coverage, demat growth, PMS/AIF minimums, SEBI brokerage cap, NSE index buffer); rewrite every "Why" in your own words.
+
+## Limitations the report must state
+
+- Before April 2019, "mid" and "small" mean liquidity tiers, not market-cap tiers.
+- The only surveillance screen is the EQ-series rule.
+- There is no sector limit, because sector labels are missing.
+- In 2012–13 the universe is small (about 170–195 stocks) and the book leans towards mid caps.
+- The market series in the residual regression changes source in 2012 and 2020.
+- Positions change only at monthly reviews (and at drawdown cuts). The 9% drift trim is a policy rule the back-test does not simulate.
+- In weak markets the fund holds fewer, larger positions (as few as 22) rather than cash.
+- The residual regression uses the market only, not size and value factors.
+- The training period is short (58 monthly decisions).

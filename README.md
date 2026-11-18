@@ -94,7 +94,8 @@ docs/
   01_data_requirements.md     what to supply and in what layout
   02_literature_review.md     reading guide with verification status
   literature_configs/         32 published strategies written in the template's layout (evidence, not your design)
-  03_design_decisions.md      the choices, the evidence, and blanks for your reasons
+  03_design_decisions.md      the group's decisions and reasons (Slow Diffusion Residual Momentum)
+  03_design_options.md        the menu behind each decision: options, evidence, facts to look at
   04_methodology.md           how each rule is implemented; known limitations
   05_risk_policy_template.md  skeleton of the written risk policy
   06_report_template.md       skeleton of the report, exhibit by exhibit
