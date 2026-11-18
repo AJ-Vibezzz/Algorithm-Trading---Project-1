@@ -260,10 +260,14 @@ def compute_signal(
     f = cfg.filters
 
     if f.require_positive_momentum:
-        # absolute-momentum screen on the first return-type component
-        for key, comp in zip(raw, cfg.components):
+        # Absolute (time-series) momentum, as in Moskowitz, Ooi & Pedersen (2012): the stock's OWN total
+        # return over the first momentum component's window must be positive. For a residual component this
+        # is deliberately not the residual score - a stock can beat the market while falling.
+        for comp in cfg.components:
             if comp.kind in ("return", "risk_adjusted_return", "residual"):
-                bad = np.isfinite(score) & ~(raw[key] > 0)
+                i0, i1 = _window(t, comp, cfg.days_per_month)
+                own = _past_return(md, i0, i1) if (i0 >= 0 and i1 > i0) else np.full(md.N, np.nan)
+                bad = np.isfinite(score) & ~(own > 0)
                 dropped["not_positive"] = int((bad & reference).sum())
                 score[bad] = np.nan
                 break

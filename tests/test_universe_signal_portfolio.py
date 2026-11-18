@@ -181,3 +181,24 @@ def test_every_weighting_scheme_runs(ws, cfg, rows, universe, weighting):
     trial = cfg.with_overrides({"portfolio.weighting": weighting})
     d = MomentumStrategy(ws.md, trial, universe).decide(rows[10])
     assert d.weights.sum() == pytest.approx(0.98, abs=0.02) and d.weights.max() <= 0.08 + 1e-9
+
+
+def test_absolute_momentum_screen_uses_the_stock_s_own_return_even_for_residual_signals(ws, cfg, rows, universe):
+    """'Positive momentum' means the stock's own past return is positive, not that it beat the market."""
+    from momo.signals import _past_return, _window
+    md = ws.md
+    c = cfg.with_overrides({"signal.components.0.kind": "residual",
+                            "signal.components.0.residual_estimation_months": 24,
+                            "signal.filters.require_positive_momentum": True})
+    t = [r for r in rows if r >= 24 * 21 + 5][0]
+    elig = universe[t].eligible
+    plain = compute_signal(md, t, c.with_overrides({"signal.filters.require_positive_momentum": False}).signal, elig)
+    screened = compute_signal(md, t, c.signal, elig)
+    i0, i1 = _window(t, c.signal.components[0], c.signal.days_per_month)
+    own = _past_return(md, i0, i1)
+    kept = np.isfinite(screened.score)
+    assert kept.any() and (own[kept] > 0).all(), "every stock kept has a positive own return"
+    should_drop = np.isfinite(plain.score) & ~(own > 0)
+    assert screened.dropped["not_positive"] == int((should_drop & elig).sum())
+    beat_market_but_fell = np.isfinite(plain.score) & (plain.raw[list(plain.raw)[0]] > 0) & (own <= 0)
+    assert not kept[beat_market_but_fell].any(), "a stock that beat the market while falling is screened out"
