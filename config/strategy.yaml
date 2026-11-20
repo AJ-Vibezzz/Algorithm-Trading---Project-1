@@ -187,7 +187,7 @@ stress:
     - {name: "Covid crash 2020 (Nifty 500 -38%)",     start: 2020-01-14, end: 2020-03-23}
     - {name: "Momentum crash: Covid rebound 2020",    start: 2020-03-24, end: 2020-06-30}   # end [verify] from 18_momentum_factor_worst_periods.csv
     - {name: "Small-cap fall 2022 (-33%)",            start: 2022-01-01, end: 2022-06-30}
-    - {name: "Small-cap fall 2024-25 (-25%)",         start: 2024-09-23, end: 2025-03-31}
+    - {name: "Small-cap fall 2024-25 (-26%)",         start: 2024-09-23, end: 2025-03-31}   # Nifty Smallcap 250 peak 23 Sep 2024, -26.1%
   market_shocks: [-0.10, -0.20, -0.30]
   adv_haircuts: [0.5, 0.75]
   spread_multipliers: [2, 3]
