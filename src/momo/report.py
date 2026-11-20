@@ -4,7 +4,7 @@
 
     tables/   one CSV per exhibit - the numbers behind every chart
     figures/  one PNG per chart
-    logs/     the net run in full: daily NAV, every order, fill, blocked order-day and position
+    logs/     the net run in full: daily NAV, benchmark returns, every order, fill, blocked order-day and position
     run_manifest.json   what was run: config, fingerprint, data, library versions
 
 The pack contains computed exhibits only. It contains no commentary: what the
@@ -238,6 +238,7 @@ def build_report_pack(ws: Workspace, cfg: StrategyConfig, variants: Dict[str, Ba
     ldir = out_dir / "logs"
     ldir.mkdir(exist_ok=True)
     net.daily.to_csv(ldir / "daily.csv")
+    bench.to_csv(ldir / "benchmarks.csv")  # daily benchmark returns on the same dates (first row 0)
     for name in ("trades", "orders", "blocks", "positions", "pnl", "screened"):
         getattr(net, name).to_csv(ldir / f"{name}.csv", index=False)
 
