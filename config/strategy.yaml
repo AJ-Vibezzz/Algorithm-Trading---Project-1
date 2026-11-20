@@ -15,7 +15,7 @@
 
 meta:
   strategy_name: "Slow Diffusion Residual Momentum"
-  authors: []                    # TODO both group members
+  authors: ["Arsh Jad", "Rohit Ranjan"]
   design_note: >
     News about thinly followed Indian mid and small caps reaches prices slowly,
     so firm-specific (market-residual) drift over the past 6-12 months persists.
