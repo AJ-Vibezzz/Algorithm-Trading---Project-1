@@ -12,7 +12,7 @@ The full menu of options, evidence and facts behind each decision is in `docs/03
 
 ## D1. Sample period and split
 
-**Our decision:** Training runs from February 2012, the first date the 24-month residual signal exists, to December 2016 (58 monthly decisions, 29 Feb 2012 – 30 Nov 2016). The test runs from January 2017 to October 2026 (117 decisions, Jan 2017 – Sep 2026).
+**Our decision:** Training runs from February 2012, the first date the 24-month residual signal exists, to December 2016 (19 quarterly reviews, 30 Mar 2012 – 30 Sep 2016; it would be 58 monthly decisions). The test runs from January 2017 to October 2026 (39 reviews, 31 Mar 2017 – 30 Sep 2026). With quarterly review the fund holds cash until the first review, so the test record starts on 31 Mar 2017.
 
 **Why:** We compare only four settings on training data, so this period is enough to choose on, and it already contains two small-cap falls (2013 and 2015–16). A ten-year test gives the most convincing out-of-sample record and keeps every episode the brief names unseen. It also spans both the pre- and post-2020 retail regimes, which lets us test our prediction that momentum weakens after the retail boom: compare 2017–19 with 2020–26 inside the test.
 
@@ -200,4 +200,4 @@ Source: `results/research/grid_20261120_201443.csv`. Over the same dates the Nif
 - Positions change only at quarterly reviews (and at drawdown cuts); the volatility target, VaR and ES limits are also reset only then. The 9% drift trim is a policy rule the back-test does not simulate.
 - In weak markets the fund holds fewer, larger positions (as few as 22) rather than cash.
 - The residual regression uses the market only, not size and value factors.
-- The training period is short (58 monthly decisions).
+- The training period is short (19 quarterly reviews).

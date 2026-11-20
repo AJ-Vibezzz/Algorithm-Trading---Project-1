@@ -22,6 +22,7 @@ This file records, accurately, what the AI assistant did in building this reposi
 | same | Joining the group's 17 yearly niftyindices.com downloads of the Nifty MidSmallcap 400 total-return index into one file and checking it (no gaps or duplicate days; matches the NSE price index's daily moves) | `tools/niftyindices_tri_to_csv.py`, `data/external/benchmarks/` | |
 | same | Checking the group's literature configs: loading each in the pipeline, converting the signal windows to the pipeline's look-back/skip convention, and looking up four citations' bibliographic records | `docs/literature_configs/` | |
 | ____ (tool used to draft the literature configs, if any) | Drafting the 32 literature configs and their README | `docs/literature_configs/` | |
+| Claude Code | Running the final strategy at the group's request: rebuilding the NSE dataset with the current code, the 4-setting training search, freezing the group's chosen setting (30 holdings, quarterly), the one-time test run, the full-sample run, and copying the test figures into the website. No parameter was chosen and no interpretation written by the AI | `results/` (see `results/README.md`), `config/frozen_strategy.yaml`, `site/data.js` | |
 | ____ (tool used to build the walkthrough website; its footer says "Built with AI assistance (Claude)") | The walkthrough website: slide text, design, interactive illustrations with made-up data, and the brief | `site/index.html`, `styles.css`, `app.js`, `data.js`; `docs/site_brief.md` | |
 | Claude Code | Adding the website to the repository: checking every value in `site/data.js` against the code and data and correcting four (listed in `docs/12_site.md`); writing the script that copies the test run's figures into the site, with refusals if the test was not run with the frozen parameters, and its tests; saving the daily benchmark returns in the report pack; the publishing workflow and `docs/12_site.md` | `site/build_site_data.py`, `tests/test_build_site_data.py`, `src/momo/report.py`, `.github/workflows/pages.yml`, `docs/12_site.md` | |
 | | | | |
@@ -31,8 +32,8 @@ This file records, accurately, what the AI assistant did in building this reposi
 
 Keep each line only if it is true when you submit; otherwise move the item into the table above.
 
-- Choosing the strategy, its parameters, the risk limits or the stress scenarios (`config/strategy.yaml`, `docs/03_design_decisions.md` and `docs/05_risk_policy_template.md` were left blank for the group).
-- Producing the back-test results in the report (the group ran the pipeline on real data with its own configuration; the AI ran the code only on synthetic test data, whose outputs are stamped and not used).
+- Choosing the strategy, its parameters, the risk limits or the stress scenarios. The group decided these in a structured review in which the AI explained options and evidence. The one AI-suggested value, the holdings count (30), is marked in `config/strategy.yaml` and `docs/03_design_decisions.md`. The setting frozen after the training search (30 holdings, quarterly) was chosen by the group.
+- Interpreting the back-test results, or recommending anything from them. At the group's request the AI ran the group's frozen configuration on real data (see the table above); it chose no parameter and wrote no commentary on the outcome.
 - Writing the analysis, the limitations assessment or the recommendation in the report.
 - Fabricating any data or result.
 
@@ -63,4 +64,6 @@ Keep each line only if it is true when you submit; otherwise move the item into 
 | Date | What was done | Evidence |
 |---|---|---|
 | 14-15 November 2026 | Repository built by the AI assistant from the project brief: code, tests, notebook, documentation, literature digest. The assistant could not reach NSE or other data hosts from its environment, so no real market data was used. | Git history of this repository (commits carry a co-author line) |
+| 15-18 November 2026 | Real NSE archive downloaded and parsers fitted to it; data facts reported to the group during its design review; group's strategy and decisions document corrected and committed on the group's instruction. | Git history |
+| 20 November 2026 | Walkthrough website added and checked. At the group's request: dataset rebuilt, final training search run, the group's choice frozen, test and full-sample runs made, website results filled in from the test run. | Git history; `results/research/` (trials, freeze record, test-access log); `results/README.md` |
 | | | |

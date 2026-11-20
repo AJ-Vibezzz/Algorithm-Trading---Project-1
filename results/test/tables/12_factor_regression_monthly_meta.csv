@@ -1,0 +1,9 @@
+,value
+alpha_annual,0.028897564736673972
+alpha_t_stat,1.2547168634639638
+r_squared,0.7758867289109604
+n,77
+frequency,monthly
+newey_west_lags,3
+factor_source,built from the panel (proxies)
+hml_source,proxy: NIFTY500 VALUE 50 minus NIFTY 500

@@ -29,19 +29,19 @@ Full reasoning, with sources, for each decision D1–D14: [`docs/03_design_decis
 | Step | Rule | Setting |
 |---|---|---|
 | **Fund** | Closely held fund, long-only, no leverage | ₹50 crore; idle cash earns the 91-day T-bill rate |
-| **Universe** | Ranks 101–500 by size, the same ranks as the Nifty MidSmallcap 400. Size = market cap from April 2019; traded value before that (the archive has no earlier market cap); top 100 fixed by the Nifty 50 / Next 50 member lists | about 170–195 stocks eligible in 2012–13, about 350 later |
+| **Universe** | Ranks 101–500 by size, the same ranks as the Nifty MidSmallcap 400. Size = market cap from April 2019; traded value before that (the archive has no earlier market cap); top 100 fixed by the Nifty 50 / Next 50 member lists | about 170–195 stocks eligible in 2012–13, 274–357 a year from 2014 |
 | **Filters** | Listed 2+ years · price ≥ ₹20 · traded on ≥ 90% of days · median daily traded value ≥ ₹1.1 crore over 6 months · not locked at a price band on > 10% of the last 60 days · EQ series only | the ₹1.1 crore floor is derived: a ₹1.67 crore position must fill within 15 days at 10% of daily volume |
 | **Signal** | Market-residual momentum over two windows, months 12→2 and 7→2 before the decision (the latest month is skipped), equally weighted | betas from a 24-month regression |
 | **Screens** | The stock's **own** return over months 12→2 must be positive, and its rise must be steady: up on at least as many days as down (information discreteness ≤ 0) | |
 | **Portfolio** | The top **30** stocks; a holding is kept until it falls below rank 45 (buffer 1.5) | |
 | **Weights** | Inverse volatility (6 months), at most 6% per stock, no sector limit; 1% cash buffer | |
-| **Rebalancing** | Monthly review; a position within 0.5 percentage points of its target is left alone | |
+| **Rebalancing** | Quarterly review (chosen on the training data over monthly); a position within 0.5 percentage points of its target is left alone. The volatility, VaR and ES limits are reset at each review; drawdown tiers are checked daily | |
 | **Execution** | Decide at the close on day *t*, trade from day *t+1* at the day's VWAP, at most 10% of 20-day average traded value **and** of that day's volume; buys worked for up to 15 days; no buying at an upper circuit or selling at a lower circuit | |
 | **Costs** | Statutory charges by date (STT, stamp duty, exchange, SEBI, GST) · brokerage 10 bps per side · bid–ask spread estimated from daily prices (Abdi–Ranaldo) · square-root market impact, k = 1.0 | |
 | **Risk** | Exposure = 99% × the **smallest** of: volatility target (16.78% a year, floor 50%), 99% 1-day VaR limit 4.5%, 97.5% ES limit 6%, and drawdown tier (−15% → 50%, −25% → 25% for 42 days) | holdings that stop trading for 42 days are written off at −30% |
 | **Benchmarks** | Nifty MidSmallcap 400 **TRI**; the equal-weight eligible universe | |
-| **Sample** | Training Feb 2012 – Dec 2016 (58 decisions); untouched test Jan 2017 – Oct 2026 (117 decisions) | |
-| **Research** | Only 2 × 2 settings compared on training data: 30 vs 40 stocks × monthly vs quarterly review, by net Sharpe | every run is counted |
+| **Sample** | Training Feb 2012 – Dec 2016 (19 quarterly reviews, Mar 2012 – Sep 2016); test Jan 2017 – Oct 2026, run once (39 reviews, Mar 2017 – Sep 2026; the fund is in cash until the first review on 31 Mar 2017) | |
+| **Research** | Only 2 × 2 settings compared on training data: 30 vs 40 stocks × monthly vs quarterly review, by net Sharpe. 30 stocks, quarterly was frozen | 12 settings tried in all, counted in the deflated Sharpe ratio |
 | **Stress tests** | All small-cap falls of 25% or more in the data (2013, 2015–16, 2018–20, 2022, 2024–25), the Covid crash and rebound; instant shocks of −10/−20/−30%; volume cuts of 50/75%; spreads ×2 and ×3 | |
 
 ### 1.3 The signal, precisely
@@ -164,7 +164,8 @@ The course allows AI to write and debug code, find and summarise papers and desi
 - **Chose the strategy and every parameter** ([`config/strategy.yaml`](config/strategy.yaml)) and wrote the reasons ([`docs/03_design_decisions.md`](docs/03_design_decisions.md)). This followed a structured review in which Claude explained options, evidence and trade-offs and the group decided. One value, the holdings count (30), was suggested by Claude and adopted; this is marked in both files. An earlier design ("Smooth Mid-Small Momentum") was tried and replaced; its runs stay in the trial count.
 - **Collected the data.** Downloaded the NSE archive (2010–2026, about 2.5 GB) and built the dataset on the group's own machine. Supplied the RBI 91-day T-bill auction table and the Nifty MidSmallcap 400 total-return index from niftyindices.com; the original downloads are in `data/external/source/`.
 - **Assembled the literature configurations**: 32 published strategies in `docs/literature_configs/`.
-- **Ran the model**: training runs and the parameter search; freeze and the test period.
+- **Ran the model on the earlier design**: training runs and its parameter search, on the group's own machine (8 settings, in `results/research/trials.csv`).
+- **Chose what to freeze**: 30 holdings, quarterly review, by the group's own selection rule (training Sharpe), after seeing the training search table.
 - **The results, their interpretation, the risk policy, the report, the recommendation and the presentation.**
 - **Verified** the data, results and citations (`docs/10_verification_checklist.md`).
 
@@ -174,6 +175,7 @@ The course allows AI to write and debug code, find and summarise papers and desi
 - **Conversion scripts** for the group's downloads (`tools/rbi_tbill_to_csv.py`, `tools/niftyindices_tri_to_csv.py`). Values are not changed.
 - **Documentation and templates:** data guide, methodology, code walkthrough, design-options menu, checklists, risk-policy and report skeletons, research-log template.
 - **Literature digest** with verification status (`docs/02_literature_review.md`), and checks of citations' bibliographic records.
+- **Ran the final strategy, at the group's request** (20 Nov 2026), on the NSE archive rebuilt in Claude Code's environment with the same code: the 4-setting training search, the freeze of the group's choice, the one-time test run and the full-sample run. The results are in [`results/`](results/README.md). Claude Code did not choose any parameter, and wrote no interpretation of the results.
 - **The walkthrough website's plumbing:** checking the site's figures against the data, the script that fills in its results from the frozen test run, and the publishing workflow (`docs/12_site.md`). The site itself is declared in the AI-use appendix.
 - **Explanations and checks** during the group's design review: options and evidence for each decision; data facts (coverage, liquidity, size-measure agreement); checks that each draft configuration does what its comments say, which led to corrections (signal-window convention, the positive-momentum screen for residual signals).
 
@@ -311,8 +313,8 @@ These are stated in full in the report and in [`docs/03_design_decisions.md`](do
 - **Surveillance:** no ASM/GSM history, so the only surveillance screen is the EQ-series rule.
 - **Sectors:** most companies have no sector label, so there is no sector limit.
 - **Market series:** the market return in the residual regression changes source in 2012 and 2020.
-- **Rebalancing:** positions change only at monthly reviews and drawdown cuts.
-- **Training period:** short (58 monthly decisions).
+- **Rebalancing:** positions change only at quarterly reviews and drawdown cuts; the volatility, VaR and ES limits are reset only at reviews.
+- **Training period:** short (19 quarterly reviews).
 - **Execution:** VWAP fills, spreads estimated from daily prices, and a one-parameter impact model.
 
 ## Licence and disclaimer

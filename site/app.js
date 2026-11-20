@@ -621,7 +621,7 @@
         p: [`Every choice was fixed using ${C.trainStart} to ${C.trainEnd}. The rules were then frozen and run exactly once on ${C.testStart} to ${C.testEnd}. No changes afterwards.`,
             "The test years include every market crash the course asked us to study, so the strategy meets them for the first time, just as a real fund would."],
         why: "A strategy tuned on the same years it's judged on will always look good. Keeping ten years unseen is the honest way to find out whether it works.",
-        deeper: `Training has 58 monthly decisions; the test has 117. The years from 2010 to early 2012 are used only to build up the 24 months of history the signal needs. Crash dates come from the index data (python run.py episodes), not from memory. The Covid rebound (from late March 2020) is our "momentum crash" test: momentum strategies have historically lost most when beaten-down shares rally sharply (Daniel &amp; Moskowitz 2016).`
+        deeper: `Training has 19 quarterly reviews; the test has 39, the first on 31 March 2017, so the fund holds cash until then. The years from 2010 to early 2012 are used only to build up the 24 months of history the signal needs. Crash dates come from the index data (python run.py episodes), not from memory. The Covid rebound (from late March 2020) is our "momentum crash" test: momentum strategies have historically lost most when beaten-down shares rally sharply (Daniel &amp; Moskowitz 2016).`
       });
       const f = figure("Point at a crash to see how deep it was. Falls are peak to trough in the Nifty Smallcap 100, plus Covid in the Nifty 500.");
       const x = lin(2010, 2027, 20, 620), toY = s => { const [yy, mm] = s.split("-").map(Number); return yy + (mm - 1) / 12; };

@@ -24,7 +24,7 @@ meta:
     volatility, reviewed quarterly against drift thresholds.
   is_example: false
 
-# --- D1. Sample: 58 training decisions (Feb 2012 - Nov 2016), 117 test (Jan 2017 - Sep 2026)
+# --- D1. Sample: 19 quarterly reviews in training (Mar 2012 - Sep 2016), 39 in the test (Mar 2017 - Sep 2026)
 sample:
   train_start: 2012-02-01
   train_end: 2016-12-31
