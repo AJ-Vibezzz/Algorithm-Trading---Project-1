@@ -22,6 +22,8 @@ This file records, accurately, what the AI assistant did in building this reposi
 | same | Joining the group's 17 yearly niftyindices.com downloads of the Nifty MidSmallcap 400 total-return index into one file and checking it (no gaps or duplicate days; matches the NSE price index's daily moves) | `tools/niftyindices_tri_to_csv.py`, `data/external/benchmarks/` | |
 | same | Checking the group's literature configs: loading each in the pipeline, converting the signal windows to the pipeline's look-back/skip convention, and looking up four citations' bibliographic records | `docs/literature_configs/` | |
 | ____ (tool used to draft the literature configs, if any) | Drafting the 32 literature configs and their README | `docs/literature_configs/` | |
+| ____ (tool used to build the walkthrough website; its footer says "Built with AI assistance (Claude)") | The walkthrough website: slide text, design, interactive illustrations with made-up data, and the brief | `site/index.html`, `styles.css`, `app.js`, `data.js`; `docs/site_brief.md` | |
+| Claude Code | Adding the website to the repository: checking every value in `site/data.js` against the code and data and correcting four (listed in `docs/12_site.md`); writing the script that copies the test run's figures into the site, with refusals if the test was not run with the frozen parameters, and its tests; saving the daily benchmark returns in the report pack; the publishing workflow and `docs/12_site.md` | `site/build_site_data.py`, `tests/test_build_site_data.py`, `src/momo/report.py`, `.github/workflows/pages.yml`, `docs/12_site.md` | |
 | | | | |
 | | | | |
 

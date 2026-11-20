@@ -174,6 +174,7 @@ The course allows AI to write and debug code, find and summarise papers and desi
 - **Conversion scripts** for the group's downloads (`tools/rbi_tbill_to_csv.py`, `tools/niftyindices_tri_to_csv.py`). Values are not changed.
 - **Documentation and templates:** data guide, methodology, code walkthrough, design-options menu, checklists, risk-policy and report skeletons, research-log template.
 - **Literature digest** with verification status (`docs/02_literature_review.md`), and checks of citations' bibliographic records.
+- **The walkthrough website's plumbing:** checking the site's figures against the data, the script that fills in its results from the frozen test run, and the publishing workflow (`docs/12_site.md`). The site itself is declared in the AI-use appendix.
 - **Explanations and checks** during the group's design review: options and evidence for each decision; data facts (coverage, liquidity, size-measure agreement); checks that each draft configuration does what its comments say, which led to corrections (signal-window convention, the positive-momentum screen for residual signals).
 
 Two safeguards are built into the code:
@@ -256,6 +257,11 @@ python run.py test --strategy config/frozen_strategy.yaml
 python run.py full --strategy config/frozen_strategy.yaml
 ```
 
+**Fill in the website's results** (after the test run; see [`docs/12_site.md`](docs/12_site.md)):
+```bash
+python site/build_site_data.py
+```
+
 To try the model without real data, `python run.py fixture` builds a synthetic test market; everything it produces is stamped SYNTHETIC. The notebook `notebooks/momentum_end_to_end.ipynb` runs the same steps with every intermediate result visible.
 
 ---
@@ -287,6 +293,8 @@ docs/
   09_ic_qa_prep.md            questions to prepare for
   10_verification_checklist.md
   11_research_log.md          one row per training run: question, basis, outcome, decision
+  12_site.md                  the walkthrough website: sources of its figures, filling in results, publishing
+site/                         the walkthrough website (plain HTML/JS; figures only in data.js)
 notebooks/momentum_end_to_end.ipynb
 src/momo/                     the model (data, universe, signals, portfolio, costs, backtest, risk, stress, analytics, report)
 tests/                        automated tests, on synthetic data

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Slow Diffusion Momentum</title>
+  <meta name="description" content="A walkthrough of a momentum strategy for Indian mid and small caps: what it does, and why, explained from scratch.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#/0">Slow Diffusion Momentum</a>
+    <nav class="chapters" aria-label="Chapters" id="chapters"></nav>
+  </header>
+
+  <main id="stage" aria-live="polite"></main>
+
+  <footer class="controls">
+    <button class="nav-btn" id="prev" type="button">Back</button>
+    <div class="progress" id="progress" aria-label="Slides"></div>
+    <span class="count" id="count"></span>
+    <button class="nav-btn primary" id="next" type="button">Next</button>
+  </footer>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

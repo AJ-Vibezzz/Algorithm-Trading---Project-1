@@ -53,6 +53,7 @@ Detailed checks for each step are in `docs/10_verification_checklist.md` (sectio
 - [ ] `python run.py test --strategy config/frozen_strategy.yaml` - **once**.
 - [ ] `python run.py full --strategy config/frozen_strategy.yaml` - for the stress tests.
 - [ ] Verify the results by hand [E], and check the out-of-sample record: trial count, freeze, test-access log [F].
+- [ ] `python site/build_site_data.py` - copies the test run's figures into the website (`docs/12_site.md`), then check the Results slide against `results/test/tables`.
 
 ## 5. Write
 
@@ -76,6 +77,8 @@ Detailed checks for each step are in `docs/10_verification_checklist.md` (sectio
 
 - [ ] 12-minute deck plus 8 minutes of Q&A; both members present.
 - [ ] Rehearse the questions in `docs/09_ic_qa_prep.md`.
+- [ ] Website: ask the instructor before publishing it; then Settings -> Pages -> source "GitHub Actions", and set `meta.repoUrl` in `site/data.js` once the repository is public.
+- [ ] Add the website's row to the AI-use declaration's tool column (who built it, with which tool).
 
 ## 7. Repository housekeeping
 
