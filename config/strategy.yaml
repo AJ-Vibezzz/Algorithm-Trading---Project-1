@@ -21,7 +21,7 @@ meta:
     so firm-specific (market-residual) drift over the past 6-12 months persists.
     Buy the 30 strongest residual-momentum stocks that are actually rising and
     whose rise came from steady rather than jumpy moves, sized by inverse
-    volatility, reviewed monthly against drift thresholds.
+    volatility, reviewed quarterly against drift thresholds.
   is_example: false
 
 # --- D1. Sample: 58 training decisions (Feb 2012 - Nov 2016), 117 test (Jan 2017 - Sep 2026)
@@ -87,7 +87,7 @@ signal:
     max_volatility_percentile: null
     max_information_discreteness: 0.0   # drop winners that fell on more days than they rose
 
-# --- D6-D8. Portfolio: monthly review, trades only past the drift thresholds
+# --- D6-D8. Portfolio: quarterly review, trades only past the drift thresholds
 portfolio:
   selection: top_n
   n_holdings: 30                 # grid: 30 vs 40
@@ -98,7 +98,7 @@ portfolio:
   max_weight_per_stock: 0.06
   max_weight_per_sector: 1.0     # no sector limit: most companies have no sector label
   holding_months: 1
-  rebalance: monthly             # grid: monthly vs quarterly
+  rebalance: quarterly           # grid: monthly vs quarterly; the group chose quarterly on training Sharpe (20 Nov 2026)
   gross_exposure: 1.0
   cash_buffer: 0.01
   no_trade_band: 0.005           # leave a position alone if within 0.5 pp (Rs 25 lakh) of target
