@@ -1,0 +1,301 @@
+{
+ "label": "train",
+ "written_at": "2026-11-20T20:21:19",
+ "data_kind": "real",
+ "period": [
+  "2012-03-30",
+  "2016-12-30"
+ ],
+ "config_fingerprint": "9f5311bc21b1",
+ "config": {
+  "meta": {
+   "strategy_name": "Slow Diffusion Residual Momentum",
+   "authors": [
+    "Arsh Jad",
+    "Rohit Ranjan"
+   ],
+   "design_note": "News about thinly followed Indian mid and small caps reaches prices slowly, so firm-specific (market-residual) drift over the past 6-12 months persists. Buy the 30 strongest residual-momentum stocks that are actually rising and whose rise came from steady rather than jumpy moves, sized by inverse volatility, reviewed quarterly against drift thresholds.\n",
+   "is_example": false
+  },
+  "sample": {
+   "train_start": "2012-02-01",
+   "train_end": "2016-12-31",
+   "test_start": "2017-01-01",
+   "test_end": "2026-10-30"
+  },
+  "capital": {
+   "initial_capital_inr": 500000000,
+   "cash_return": "rf"
+  },
+  "benchmark": {
+   "primary": "NIFTY MIDSMALLCAP 400 TRI",
+   "others": [
+    "UNIVERSE_EQUAL"
+   ]
+  },
+  "universe": {
+   "source": "mcap_rank",
+   "segments": [
+    "mid",
+    "small"
+   ],
+   "rank_bounds": {
+    "large": [
+     1,
+     100
+    ],
+    "mid": [
+     101,
+     250
+    ],
+    "small": [
+     251,
+     500
+    ],
+    "micro": [
+     501,
+     750
+    ]
+   },
+   "mcap_average_days": 126,
+   "size_metrics": [
+    "exchange_mcap",
+    "exchange_list",
+    "traded_value"
+   ],
+   "large_cap_indices": [
+    "NIFTY 50",
+    "NIFTY NEXT 50"
+   ],
+   "index_names": [],
+   "allowed_series": [
+    "EQ"
+   ],
+   "min_listing_days": 504,
+   "min_price_inr": 20,
+   "min_median_traded_value_inr": 11000000,
+   "liquidity_lookback_days": 126,
+   "min_traded_days_fraction": 0.9,
+   "max_circuit_days_fraction": 0.1,
+   "circuit_lookback_days": 60,
+   "exclude_surveillance": true
+  },
+  "signal": {
+   "components": [
+    {
+     "kind": "residual",
+     "lookback_months": 12,
+     "skip_months": 1,
+     "weight": 0.5,
+     "residual_estimation_months": 24
+    },
+    {
+     "kind": "residual",
+     "lookback_months": 7,
+     "skip_months": 1,
+     "weight": 0.5,
+     "residual_estimation_months": 24
+    }
+   ],
+   "winsorize_pct": 0.01,
+   "min_history_fraction": 0.8,
+   "days_per_month": 21,
+   "volatility_lookback_days": 252,
+   "filters": {
+    "require_positive_momentum": true,
+    "max_volatility_percentile": null,
+    "max_information_discreteness": 0.0
+   }
+  },
+  "portfolio": {
+   "selection": "top_n",
+   "n_holdings": 30,
+   "top_fraction": null,
+   "exit_rank_multiple": 1.5,
+   "weighting": "inverse_vol",
+   "weighting_lookback_days": 126,
+   "max_weight_per_stock": 0.06,
+   "max_weight_per_sector": 1.0,
+   "holding_months": 1,
+   "rebalance": "quarterly",
+   "gross_exposure": 1.0,
+   "cash_buffer": 0.01,
+   "no_trade_band": 0.005
+  },
+  "execution": {
+   "price": "vwap",
+   "participation_cap": 0.1,
+   "adv_window_days": 20,
+   "cap_on_realised_volume": true,
+   "max_execution_days": 15,
+   "min_trade_value_inr": 0,
+   "block_buy_at_upper_circuit": true,
+   "block_sell_at_lower_circuit": true
+  },
+  "costs": {
+   "brokerage_bps_per_side": 10,
+   "spread_model": "abdi_ranaldo",
+   "fixed_half_spread_bps": null,
+   "spread_window_days": 21,
+   "max_half_spread_bps": 250,
+   "impact_coefficient": 1.0,
+   "impact_vol_window_days": 60,
+   "dp_charge_inr_per_sell": 0
+  },
+  "risk": {
+   "var": {
+    "confidence": 0.99,
+    "horizon_days": 1,
+    "lookback_days": 500,
+    "method": "historical",
+    "limit_pct_nav": 0.045,
+    "action": "scale"
+   },
+   "es": {
+    "confidence": 0.975,
+    "limit_pct_nav": 0.06
+   },
+   "vol_target": {
+    "enabled": true,
+    "annual_vol": 0.1678,
+    "lookback_days": 126,
+    "min_exposure": 0.5,
+    "max_exposure": 1.0
+   },
+   "drawdown": {
+    "soft_limit": 0.15,
+    "soft_exposure": 0.5,
+    "hard_limit": 0.25,
+    "hard_exposure": 0.25,
+    "cooloff_days": 42,
+    "soft_release_level": 0.1
+   },
+   "stop_loss": {
+    "enabled": false,
+    "kind": "trailing",
+    "threshold": null,
+    "cooldown_days": 21
+   },
+   "regime_filter": {
+    "enabled": false,
+    "index": null,
+    "ma_days": 200,
+    "exposure_when_below": 0.5
+   },
+   "beta": {
+    "max_portfolio_beta": null,
+    "lookback_days": 252,
+    "benchmark": null
+   },
+   "hedge": {
+    "enabled": false,
+    "index": null,
+    "ratio": 1.0,
+    "margin_rate": 0.2,
+    "cost_bps_per_side": 2.0,
+    "roll_cost_bps_per_month": 2.0
+   },
+   "liquidity": {
+    "horizon_days": 15,
+    "min_sellable_fraction": 0.9
+   },
+   "delisting_return": -0.3,
+   "max_stale_days": 42
+  },
+  "stress": {
+   "windows": [
+    {
+     "name": "Small-cap fall 2013 (-35%, train)",
+     "start": "2013-01-01",
+     "end": "2013-08-31"
+    },
+    {
+     "name": "Small-cap fall 2015-16 (-28%, train)",
+     "start": "2015-04-01",
+     "end": "2016-02-29"
+    },
+    {
+     "name": "Small-cap correction 2018-20 (-60%)",
+     "start": "2018-04-01",
+     "end": "2020-03-31"
+    },
+    {
+     "name": "Covid crash 2020 (Nifty 500 -38%)",
+     "start": "2020-01-14",
+     "end": "2020-03-23"
+    },
+    {
+     "name": "Momentum crash: Covid rebound 2020",
+     "start": "2020-03-24",
+     "end": "2020-06-30"
+    },
+    {
+     "name": "Small-cap fall 2022 (-33%)",
+     "start": "2022-01-01",
+     "end": "2022-06-30"
+    },
+    {
+     "name": "Small-cap fall 2024-25 (-26%)",
+     "start": "2024-09-23",
+     "end": "2025-03-31"
+    }
+   ],
+   "market_shocks": [
+    -0.1,
+    -0.2,
+    -0.3
+   ],
+   "adv_haircuts": [
+    0.5,
+    0.75
+   ],
+   "spread_multipliers": [
+    2,
+    3
+   ]
+  },
+  "research": {
+   "grid": {
+    "portfolio.n_holdings": [
+     30,
+     40
+    ],
+    "portfolio.rebalance": [
+     "monthly",
+     "quarterly"
+    ]
+   },
+   "selection_metric": "sharpe",
+   "capacity_aum_inr": [
+    500000000,
+    1000000000,
+    2500000000,
+    10000000000
+   ]
+  }
+ },
+ "is_example_config": false,
+ "data": {
+  "first_day": "2010-01-04",
+  "last_day": "2026-11-13",
+  "trading_days": 4185,
+  "companies": 3267,
+  "risk_free_supplied": true,
+  "factor_source": "built from the panel (proxies)",
+  "hml_source": "proxy: NIFTY500 VALUE 50 minus NIFTY 500"
+ },
+ "statutory_entries_not_verified": [
+  "stt_delivery (from 2006-06-01)",
+  "stamp_duty (from 2000-01-01)",
+  "exchange_transaction (from 2000-01-01)",
+  "tax_on_services (from 2009-02-24)",
+  "tax_on_services (from 2017-07-01)",
+  "gst_on_sebi_fee_from (from 2022-07-18)"
+ ],
+ "versions": {
+  "python": "3.13.18",
+  "pandas": "3.0.5",
+  "numpy": "2.5.3"
+ },
+ "git_commit": "ddd657f"
+}

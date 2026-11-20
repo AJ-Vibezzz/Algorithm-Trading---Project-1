@@ -1,0 +1,7 @@
+side,reason,order_days,orders,shortfall_value
+SELL,liquidity_cap,1281,335,18117397661.32798
+BUY,liquidity_cap,1162,351,21163875157.708824
+BUY,cash,270,24,505241843.37376547
+SELL,no_trading,37,1,0.0
+SELL,lower_circuit,19,7,157832958.25663766
+BUY,upper_circuit,14,6,91854905.57142146

@@ -26,11 +26,11 @@ A valid basis is a published finding, a fact about the data (from `sizecheck`,
 outcome, not a basis.
 
 ## 2. Freeze
-- Date frozen: ______  Fingerprint: ______  Parameter sets tried: ______
+- Date frozen: 20 Nov 2026  Fingerprint: 9f5311bc21b1  Parameter sets tried: 12 (8 earlier design on the group's machine, 4 final grid run by Claude Code at the group's request)
 - Why this configuration (in our own words): ______
 
 ## 3. Test period
-- Date run: ______  Times the test period was opened (`test_access_log.csv`): ______
+- Date run: 20 Nov 2026 (by Claude Code, at the group's request)  Times the test period was opened (`test_access_log.csv`): 2, both with the frozen fingerprint: the test run, then the full-sample run
 
 Note: runs are counted in `<out>/research/trials.csv`, where `<out>` is the
 `--out` folder (default `results`). Keep every training-period run on the

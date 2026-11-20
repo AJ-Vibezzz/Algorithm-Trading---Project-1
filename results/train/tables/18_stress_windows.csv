@@ -1,0 +1,8 @@
+window,start,end,days,strategy_return,strategy_max_drawdown,strategy_worst_day,average_exposure,NIFTY MIDSMALLCAP 400 TRI return,UNIVERSE_EQUAL return,holding_days_locked_at_lower_band,max_share_of_book_locked_down,sell_order_days_blocked,writeoffs,risk_events,note
+"Small-cap fall 2013 (-35%, train)",2013-01-01,2013-08-31,168,-0.18091395693889267,-0.19557776064107335,-0.023346944064019937,0.6900459341875037,-0.2290913598279395,-0.32683800372563065,53.0,0.01205505002690743,470.0,0.0,1.0,
+"Small-cap fall 2015-16 (-28%, train)",2015-04-01,2016-02-29,227,-0.08089674939166902,-0.16590513684798214,-0.08313016663873973,0.7205330393871741,-0.133313208573148,-0.1338873043283969,0.0,0.0,560.0,1.0,1.0,
+Small-cap correction 2018-20 (-60%),2018-04-01,2020-03-31,0,,,,,,,,,,,,outside the back-test period - use replay_stress
+Covid crash 2020 (Nifty 500 -38%),2020-01-14,2020-03-23,0,,,,,,,,,,,,outside the back-test period - use replay_stress
+Momentum crash: Covid rebound 2020,2020-03-24,2020-06-30,0,,,,,,,,,,,,outside the back-test period - use replay_stress
+Small-cap fall 2022 (-33%),2022-01-01,2022-06-30,0,,,,,,,,,,,,outside the back-test period - use replay_stress
+Small-cap fall 2024-25 (-26%),2024-09-23,2025-03-31,0,,,,,,,,,,,,outside the back-test period - use replay_stress

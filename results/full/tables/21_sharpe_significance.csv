@@ -1,0 +1,7 @@
+,value
+sharpe_per_period,0.03567923689337943
+sharpe_annualised,0.5663903267306565
+trials,12.0
+expected_max_sharpe_under_no_skill_annualised,0.36570999691129547
+probabilistic_sharpe_vs_zero,0.9818631447491014
+deflated_sharpe_probability,0.7709199931539499

@@ -15,16 +15,16 @@
 
 meta:
   strategy_name: "Slow Diffusion Residual Momentum"
-  authors: []                    # TODO both group members
+  authors: ["Arsh Jad", "Rohit Ranjan"]
   design_note: >
     News about thinly followed Indian mid and small caps reaches prices slowly,
     so firm-specific (market-residual) drift over the past 6-12 months persists.
     Buy the 30 strongest residual-momentum stocks that are actually rising and
     whose rise came from steady rather than jumpy moves, sized by inverse
-    volatility, reviewed monthly against drift thresholds.
+    volatility, reviewed quarterly against drift thresholds.
   is_example: false
 
-# --- D1. Sample: 58 training decisions (Feb 2012 - Nov 2016), 117 test (Jan 2017 - Sep 2026)
+# --- D1. Sample: 19 quarterly reviews in training (Mar 2012 - Sep 2016), 39 in the test (Mar 2017 - Sep 2026)
 sample:
   train_start: 2012-02-01
   train_end: 2016-12-31
@@ -87,7 +87,7 @@ signal:
     max_volatility_percentile: null
     max_information_discreteness: 0.0   # drop winners that fell on more days than they rose
 
-# --- D6-D8. Portfolio: monthly review, trades only past the drift thresholds
+# --- D6-D8. Portfolio: quarterly review, trades only past the drift thresholds
 portfolio:
   selection: top_n
   n_holdings: 30                 # grid: 30 vs 40
@@ -98,7 +98,7 @@ portfolio:
   max_weight_per_stock: 0.06
   max_weight_per_sector: 1.0     # no sector limit: most companies have no sector label
   holding_months: 1
-  rebalance: monthly             # grid: monthly vs quarterly
+  rebalance: quarterly           # grid: monthly vs quarterly; the group chose quarterly on training Sharpe (20 Nov 2026)
   gross_exposure: 1.0
   cash_buffer: 0.01
   no_trade_band: 0.005           # leave a position alone if within 0.5 pp (Rs 25 lakh) of target
@@ -187,7 +187,7 @@ stress:
     - {name: "Covid crash 2020 (Nifty 500 -38%)",     start: 2020-01-14, end: 2020-03-23}
     - {name: "Momentum crash: Covid rebound 2020",    start: 2020-03-24, end: 2020-06-30}   # end [verify] from 18_momentum_factor_worst_periods.csv
     - {name: "Small-cap fall 2022 (-33%)",            start: 2022-01-01, end: 2022-06-30}
-    - {name: "Small-cap fall 2024-25 (-25%)",         start: 2024-09-23, end: 2025-03-31}
+    - {name: "Small-cap fall 2024-25 (-26%)",         start: 2024-09-23, end: 2025-03-31}   # Nifty Smallcap 250 peak 23 Sep 2024, -26.1%
   market_shocks: [-0.10, -0.20, -0.30]
   adv_haircuts: [0.5, 0.75]
   spread_multipliers: [2, 3]

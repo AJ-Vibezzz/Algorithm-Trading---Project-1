@@ -1,0 +1,18 @@
+date,event,symbol,detail
+2013-03-22,soft_limit_breached,,drawdown -15.9%; exposure multiplier 0.50
+2013-12-20,soft_limit_released,,drawdown -9.8%; exposure multiplier 1.00
+2016-02-11,soft_limit_breached,,drawdown -16.2%; exposure multiplier 0.50
+2016-06-01,soft_limit_released,,drawdown -9.9%; exposure multiplier 1.00
+2016-11-15,soft_limit_breached,,drawdown -15.2%; exposure multiplier 0.50
+2017-01-27,soft_limit_released,,drawdown -9.9%; exposure multiplier 1.00
+2018-06-04,soft_limit_breached,,drawdown -15.2%; exposure multiplier 0.50
+2018-08-31,soft_limit_released,,drawdown -9.9%; exposure multiplier 1.00
+2018-09-27,soft_limit_breached,,drawdown -15.3%; exposure multiplier 0.50
+2020-01-15,soft_limit_released,,drawdown -9.8%; exposure multiplier 1.00
+2020-03-16,soft_limit_breached,,drawdown -15.9%; exposure multiplier 0.50
+2020-07-21,soft_limit_released,,drawdown -10.0%; exposure multiplier 1.00
+2025-01-27,soft_limit_breached,,drawdown -16.3%; exposure multiplier 0.50
+2026-01-02,soft_limit_released,,drawdown -9.8%; exposure multiplier 1.00
+2026-03-13,soft_limit_breached,,drawdown -15.1%; exposure multiplier 0.50
+2026-06-17,soft_limit_released,,drawdown -10.0%; exposure multiplier 1.00
+2026-10-21,soft_limit_breached,,drawdown -17.0%; exposure multiplier 0.50

@@ -12,7 +12,7 @@ The full menu of options, evidence and facts behind each decision is in `docs/03
 
 ## D1. Sample period and split
 
-**Our decision:** Training runs from February 2012, the first date the 24-month residual signal exists, to December 2016 (58 monthly decisions, 29 Feb 2012 – 30 Nov 2016). The test runs from January 2017 to October 2026 (117 decisions, Jan 2017 – Sep 2026).
+**Our decision:** Training runs from February 2012, the first date the 24-month residual signal exists, to December 2016 (19 quarterly reviews, 30 Mar 2012 – 30 Sep 2016; it would be 58 monthly decisions). The test runs from January 2017 to October 2026 (39 reviews, 31 Mar 2017 – 30 Sep 2026). With quarterly review the fund holds cash until the first review, so the test record starts on 31 Mar 2017.
 
 **Why:** We compare only four settings on training data, so this period is enough to choose on, and it already contains two small-cap falls (2013 and 2015–16). A ten-year test gives the most convincing out-of-sample record and keeps every episode the brief names unseen. It also spans both the pre- and post-2020 retail regimes, which lets us test our prediction that momentum weakens after the retail boom: compare 2017–19 with 2020–26 inside the test.
 
@@ -87,9 +87,9 @@ The full menu of options, evidence and facts behind each decision is in `docs/03
 
 ## D8. Rebalancing, holding period and cash
 
-**Our decision:** Monthly review with a 0.5% no-trade band, compared with a quarterly review on training data. A single portfolio, with no overlapping tranches. A 1% cash buffer.
+**Our decision:** Quarterly review with a 0.5% no-trade band. Monthly and quarterly review were compared on the training data (D14), and quarterly was chosen at freeze. A single portfolio, with no overlapping tranches. A 1% cash buffer.
 
-**Why:** Our objective is a consistent return generator, so we trade only when the portfolio has drifted meaningfully from target. Each month we review the ranking but adjust only positions more than 0.5 percentage points (₹25 lakh) away from their target weight. Holdings are kept until they fall below rank 45, so both buying and selling are threshold-driven rather than calendar-driven. The pipeline cannot trigger a rebalance between monthly reviews, which we state as a limitation. Quarterly review is tested because theory does not settle whether the extra responsiveness is worth its cost. A single portfolio keeps the holdings readable for our investors. The 1% cash buffer covers trading costs and price moves while orders are worked over several days; the fund is otherwise fully invested (exposure is 99% of whatever the risk layers allow), so a larger buffer would be a permanent drag. Idle cash earns the T-bill rate.
+**Why:** Our objective is a consistent return generator, so we trade only when the portfolio has drifted meaningfully from target. At each quarterly review we re-rank but adjust only positions more than 0.5 percentage points (₹25 lakh) away from their target weight. Holdings are kept until they fall below rank 45, so both buying and selling are threshold-driven rather than calendar-driven. The pipeline cannot trigger a rebalance between quarterly reviews, which we state as a limitation. Quarterly review is tested because theory does not settle whether the extra responsiveness is worth its cost. A single portfolio keeps the holdings readable for our investors. The 1% cash buffer covers trading costs and price moves while orders are worked over several days; the fund is otherwise fully invested (exposure is 99% of whatever the risk layers allow), so a larger buffer would be a permanent drag. Idle cash earns the T-bill rate.
 
 ## D9. Execution
 
@@ -115,7 +115,7 @@ The full menu of options, evidence and facts behind each decision is in `docs/03
 
 ## D11. Risk framework
 
-**How the layers combine.** Each month, exposure = 99% × the smallest of four limits: the volatility target, the VaR limit, the ES limit and the drawdown tier. They do not multiply. Volatility, VaR and ES are recalculated at the monthly decision; the drawdown tiers are checked daily and can cut exposure between decisions.
+**How the layers combine.** At each review, exposure = 99% × the smallest of four limits: the volatility target, the VaR limit, the ES limit and the drawdown tier. They do not multiply. Volatility, VaR and ES are recalculated only at the quarterly review, so between reviews they do not react to a change in market volatility; the drawdown tiers are checked daily and can cut exposure between reviews.
 
 **Volatility targeting:** On. The target is 16.78% a year, the Nifty Midsmallcap 400 TRI's annualised volatility over February 2012 – December 2016, with volatility measured over six months. This layer alone allows exposure between 50% and 100%.
 
@@ -132,7 +132,7 @@ The full menu of options, evidence and facts behind each decision is in `docs/03
 **Other settings:**
 
 - At least 90% of the book must be sellable within 15 days at our participation cap. This is monitored: on a breach, the manager trims the least liquid positions at the next rebalance.
-- Policy rule, not simulated in the back-test: any position that drifts above 9% (1.5 × the cap) between monthly reviews is trimmed by the manager. The back-test only changes positions at monthly reviews and when a drawdown tier cuts exposure. How often a position actually exceeded 9% is counted from the daily weights in `logs/positions.csv`; `14_limit_breach_summary.csv` counts days above the 6% cap.
+- Policy rule, not simulated in the back-test: any position that drifts above 9% (1.5 × the cap) between quarterly reviews is trimmed by the manager. The back-test only changes positions at quarterly reviews and when a drawdown tier cuts exposure. How often a position actually exceeded 9% is counted from the daily weights in `logs/positions.csv`; `14_limit_breach_summary.csv` counts days above the 6% cap.
 - No per-stock stop-loss, market-timing filter, beta cap or futures hedge.
 
 **Why:** The liquidity standard matches the 15-day window we use to build positions, while the liquidity stress test covers a crisis exit. Stop-losses and timing filters would duplicate protection already given by the sell buffer, the positive-momentum screen, volatility targeting and the drawdown tiers, and would add parameters. The residual signal already removes market exposure from the ranking, so beta is reported rather than limited. The mandate is long-only. Breaches are acted on by the fund manager within one trading day and reported to investors in the monthly update.
@@ -162,6 +162,19 @@ The full menu of options, evidence and facts behind each decision is in `docs/03
 
 **Trial count to report:** the 8 runs of our earlier "Smooth Mid-Small" design remain in `trials.csv`. The total at freeze is 8, plus every run of this design, plus any calibration runs. We report the full total.
 
+**Outcome (training period, 20 Nov 2026; runs made by Claude Code at the group's request, choice made by the group):**
+
+| Holdings | Review | CAGR | Volatility | Sharpe | Max drawdown | Calmar | Turnover / yr | Costs / yr |
+|---|---|---|---|---|---|---|---|---|
+| 30 | quarterly | 10.4% | 14.6% | 0.21 | −19.6% | 0.53 | 1.88× | 4.0% |
+| 40 | quarterly | 9.0% | 14.5% | 0.12 | −19.7% | 0.46 | 1.85× | 3.9% |
+| 30 | monthly | 8.5% | 14.7% | 0.09 | −19.6% | 0.44 | 3.09× | 6.7% |
+| 40 | monthly | 7.9% | 14.6% | 0.04 | −20.4% | 0.39 | 2.86× | 6.1% |
+
+Source: `results/research/grid_20261120_201443.csv`. Over the same dates the Nifty MidSmallcap 400 TRI returned 17.1% a year (volatility 16.6%, worst fall −26.3%).
+
+**Frozen:** 30 holdings, quarterly review: first on Sharpe, our selection rule. Frozen on 20 Nov 2026, fingerprint `9f5311bc21b1`, after 12 parameter sets (8 from the earlier design, 4 here). The frozen file has the same parameters as search trial `5f1bbf22d2b0`; only the design note's wording changed from "monthly" to "quarterly".
+
 **Robustness runs, reported but not used for selection:**
 
 - traded-value ranking throughout
@@ -184,7 +197,7 @@ The full menu of options, evidence and facts behind each decision is in `docs/03
 - There is no sector limit, because sector labels are missing.
 - In 2012–13 the universe is small (about 170–195 stocks) and the book leans towards mid caps.
 - The market series in the residual regression changes source in 2012 and 2020.
-- Positions change only at monthly reviews (and at drawdown cuts). The 9% drift trim is a policy rule the back-test does not simulate.
+- Positions change only at quarterly reviews (and at drawdown cuts); the volatility target, VaR and ES limits are also reset only then. The 9% drift trim is a policy rule the back-test does not simulate.
 - In weak markets the fund holds fewer, larger positions (as few as 22) rather than cash.
 - The residual regression uses the market only, not size and value factors.
-- The training period is short (58 monthly decisions).
+- The training period is short (19 quarterly reviews).

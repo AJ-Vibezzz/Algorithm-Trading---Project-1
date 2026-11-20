@@ -27,7 +27,7 @@ Checked on 20 Nov 2026 against the code, `config/strategy.yaml` and the built da
 |---|---|---|
 | `facts.companies`, `stoppedTrading` | 3,267; 625 | data quality report of the group's build |
 | `facts.dataStart`, `dataEnd` | 4 Jan 2010 to 16 Nov 2026 | first and last trading day in the group's build |
-| `facts.eligible` | 195 (2012), 168 (2013), 274–357 (each year from 2014) | typical eligible count at a monthly decision in each year, with the strategy's universe filters |
+| `facts.eligible` | 195 (2012), 168 (2013), 274–357 (each year from 2014) | typical eligible count at a month-end in each year, with the strategy's universe filters |
 | `facts.rSquaredMedian` | 11–24% | median R² of the 24-month market regressions, by year |
 | `facts.minCandidates` | 22 | fewest stocks passing both signal filters at a decision (30 Sep 2013) |
 | `config.*` | | `config/strategy.yaml` (fund size, holdings, exit rank 1.5 × 30, weight cap, participation, execution days, liquidity floor, brokerage, impact k, vol target and floor, VaR/ES limits, drawdown tiers, cash buffer, sample dates) |

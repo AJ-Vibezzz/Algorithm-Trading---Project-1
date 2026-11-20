@@ -293,7 +293,7 @@
         p: ["When the whole market rises, almost every share rises with it. That tells us nothing about any one company's news.",
             "So for each company we first estimate how much it usually moves with the market. Then we subtract that part. What's left, its residual, is the movement caused by its own news. We rank companies on that."],
         why: "Slow diffusion is about company-specific news. Removing the market's move keeps the signal focused on exactly that.",
-        deeper: `This is residual momentum (Blitz, Huij &amp; Martens 2011). Each month we regress a company's daily returns on the market's over the past 24 months. Its score is the sum of its residuals over the window, divided by their standard deviation × √days: a t-statistic, so steady company-specific gains score higher than erratic ones. In our universe the market explains a median of only ${D.facts.rSquaredMedian} of a share's daily movement, so most of the variation is company-specific.`
+        deeper: `This is residual momentum (Blitz, Huij &amp; Martens 2011). At each quarterly review we regress a company's daily returns on the market's over the past 24 months. Its score is the sum of its residuals over the window, divided by their standard deviation × √days: a t-statistic, so steady company-specific gains score higher than erratic ones. In our universe the market explains a median of only ${D.facts.rSquaredMedian} of a share's daily movement, so most of the variation is company-specific.`
       });
       const f = figure("Two made-up companies over one year.");
       const A = { name: "Company A", beta: 1.3, own: 0.04 }, B = { name: "Company B", beta: 0.5, own: 0.15 };
@@ -430,10 +430,10 @@
       const text = textCol({
         chapter: "Building the fund",
         h2: `We buy the top ${C.holdings}, and only sell when a share drops below ${C.sellBelowRank}.`,
-        p: [`Each month every eligible share gets a score, and we rank them. A share enters the fund when it reaches the top ${C.holdings}.`,
+        p: [`Every three months every eligible share gets a score, and we rank them. A share enters the fund when it reaches the top ${C.holdings}.`,
             `Once we own it, we keep it until it falls below rank ${C.sellBelowRank}. A share slipping from 28th to 35th is probably still drifting, and selling it would just cost money.`],
         why: `${C.holdings} shares is a portfolio our investors can follow, where one share collapsing by half costs the fund under 2%. The gap between "buy" and "sell" cuts trading a lot.`,
-        deeper: `The sell rule is a "buffer" of 1.5 × ${C.holdings} = ${C.sellBelowRank}. Novy-Marx &amp; Velikov (2016, 2019) find buffering the most effective way to cut momentum's trading costs. NSE's 30-stock momentum index uses a similar buffer. We also test 40 holdings on the training data.`
+        deeper: `The sell rule is a "buffer" of 1.5 × ${C.holdings} = ${C.sellBelowRank}. Novy-Marx &amp; Velikov (2016, 2019) find buffering the most effective way to cut momentum's trading costs. NSE's 30-stock momentum index uses a similar buffer. On the training data we compared 30 and 40 holdings, reviewed monthly or quarterly, and chose 30, quarterly.`
       });
       const f = figure("Ranks 1 to 100. Move the share and choose whether we already own it.");
       const g = svg(640, 130, "Ranking strip with buy, hold and sell zones");
@@ -571,7 +571,7 @@
         p: ["Each limit can cut how much of the fund is in shares, with the rest in cash. They don't add up: on any day, the strictest one wins.",
             "Try a calm market, then a panic, then a fund that has fallen from its peak."],
         why: "The aim is a consistent return generator. These limits trim risk when markets turn rough, but never go fully to cash, because momentum's worst losses tend to come in sharp rebounds after a crash.",
-        deeper: `<b>Volatility target:</b> exposure = ${pctPlain(C.volTarget, 2)} ÷ recent volatility (6 months), between ${pctPlain(C.volFloor)} and 100%. The target is the benchmark's own volatility over 2012–16 (Barroso &amp; Santa-Clara 2015; Moreira &amp; Muir 2017). <b>VaR and Expected Shortfall:</b> 99% one-day VaR at most ${pctPlain(C.varLimit, 1)} of the fund, 97.5% ES at most ${pctPlain(C.esLimit)}. <b>Drawdown tiers:</b> half invested at ${pctPlain(C.softDD)} below the peak, ${pctPlain(C.hardExposure)} at ${pctPlain(C.hardDD)} for at least 42 days. Final exposure is 99% × the smallest of the four, because of a 1% cash buffer. The VaR and ES bars here use a simple normal approximation; the back-test uses 500 days of history.`
+        deeper: `<b>Volatility target:</b> exposure = ${pctPlain(C.volTarget, 2)} ÷ recent volatility (6 months), set at each quarterly review, between ${pctPlain(C.volFloor)} and 100%. The target is the benchmark's own volatility over 2012–16 (Barroso &amp; Santa-Clara 2015; Moreira &amp; Muir 2017). <b>VaR and Expected Shortfall:</b> 99% one-day VaR at most ${pctPlain(C.varLimit, 1)} of the fund, 97.5% ES at most ${pctPlain(C.esLimit)}. <b>Drawdown tiers:</b> half invested at ${pctPlain(C.softDD)} below the peak, ${pctPlain(C.hardExposure)} at ${pctPlain(C.hardDD)} for at least 42 days. Final exposure is 99% × the smallest of the four, because of a 1% cash buffer. The volatility, VaR and ES limits are reset at each quarterly review; the drawdown tiers are checked every day. The VaR and ES bars here use a simple normal approximation; the back-test uses 500 days of history.`
       });
       const f = figure("How the limits combine. A simplified illustration of the real rules.");
       const g = svg(640, 250, "Exposure allowed by each limit and the final exposure");
@@ -621,7 +621,7 @@
         p: [`Every choice was fixed using ${C.trainStart} to ${C.trainEnd}. The rules were then frozen and run exactly once on ${C.testStart} to ${C.testEnd}. No changes afterwards.`,
             "The test years include every market crash the course asked us to study, so the strategy meets them for the first time, just as a real fund would."],
         why: "A strategy tuned on the same years it's judged on will always look good. Keeping ten years unseen is the honest way to find out whether it works.",
-        deeper: `Training has 58 monthly decisions; the test has 117. The years from 2010 to early 2012 are used only to build up the 24 months of history the signal needs. Crash dates come from the index data (python run.py episodes), not from memory. The Covid rebound (from late March 2020) is our "momentum crash" test: momentum strategies have historically lost most when beaten-down shares rally sharply (Daniel &amp; Moskowitz 2016).`
+        deeper: `Training has 19 quarterly reviews; the test has 39, the first on 31 March 2017, so the fund holds cash until then. The years from 2010 to early 2012 are used only to build up the 24 months of history the signal needs. Crash dates come from the index data (python run.py episodes), not from memory. The Covid rebound (from late March 2020) is our "momentum crash" test: momentum strategies have historically lost most when beaten-down shares rally sharply (Daniel &amp; Moskowitz 2016).`
       });
       const f = figure("Point at a crash to see how deep it was. Falls are peak to trough in the Nifty Smallcap 100, plus Covid in the Nifty 500.");
       const x = lin(2010, 2027, 20, 620), toY = s => { const [yy, mm] = s.split("-").map(Number); return yy + (mm - 1) / 12; };

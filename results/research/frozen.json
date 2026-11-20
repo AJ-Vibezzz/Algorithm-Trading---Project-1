@@ -1,0 +1,7 @@
+{
+ "fingerprint": "9f5311bc21b1",
+ "frozen_at": "2026-11-20T20:17:50",
+ "parameter_sets_tried_on_train": 12,
+ "test_accesses_before_freeze": 0,
+ "config_file": "config/frozen_strategy.yaml"
+}

@@ -83,10 +83,12 @@ def _results(path: Path) -> dict:
     return json.loads(m.group(1))
 
 
-def test_site_data_js_has_null_results_and_markers():
+def test_site_data_js_has_the_results_markers():
     text = (ROOT / "site" / "data.js").read_text(encoding="utf-8")
     assert bsd.RESULTS_BEGIN in text and bsd.RESULTS_END in text
-    assert re.search(r"results: null\n", text)
+    # either still empty, or filled by the script with valid JSON
+    if not re.search(r"results: null\n", text):
+        assert _results(ROOT / "site" / "data.js")["period"]
 
 
 def test_fills_results_from_the_test_pack(tmp_path):
