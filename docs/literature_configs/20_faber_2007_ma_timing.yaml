@@ -1,0 +1,46 @@
+# =============================================================================
+# LITERATURE CONFIG 20 - Faber (2007): 10-month moving-average timing
+# Layout follows strategy_template.yaml; records the SOURCE, not your design.
+# null = source silent / not applicable. "[verify]" = check against original.
+# =============================================================================
+# Window convention (as this pipeline reads it - src/momo/signals.py, _window):
+# lookback_months = months from the decision date back to the START of the window,
+# skip_months = months from the decision date back to its END. So "12-1"
+# momentum (returns of months t-12..t-2, decided at the end of t-1) = lookback 12, skip 1.
+
+source:
+  citation: "Faber, M. T. (2007). A Quantitative Approach to Tactical Asset Allocation. Journal of Wealth Management, 9(4), 69-79."   # pages [verify]
+  update: "Faber, M. T. (2018). A Quantitative Approach to Tactical Asset Allocation Revisited 10 Years Later. Journal of Portfolio Management (special issue)."   # [verify]
+  family: time-series momentum / trend filter
+  market: "US equities from 1901; five asset classes (US stocks, foreign stocks, bonds, REITs, commodities) from 1973"
+  sample_in_paper: "1901-2005 (US); 1973-2005 (five assets)"   # [verify end year]
+  long_short_in_paper: false
+  headline_finding: >
+    Holding an asset only while its month-end price is above its 10-month simple
+    moving average, and otherwise holding T-bills, delivers roughly equity-like
+    returns with bond-like volatility and much smaller drawdowns.
+  pipeline_fit: partial
+  pipeline_notes: >
+    Not a stock-selection rule - a market-timing overlay. In the template it is
+    the regime_filter applied to your benchmark index. Faber checks only at
+    month-end on total-return series and goes fully to cash. The 10-month SMA is
+    widely suspected of being data-mined (several alternative windows work
+    similarly) - if you use it, say why 10 and how many windows you tried.
+
+meta:
+  strategy_name: "lit-Faber2007-SMA10"
+  authors: []
+  design_note: "Exit to cash when the market's month-end price closes below its 10-month average."
+  is_example: false
+
+capital:
+  cash_return: rf
+
+risk:
+  regime_filter:
+    enabled: true
+    index: null                # your benchmark index
+    ma_days: 210               # 10 months x 21 trading days; template default is 200
+    exposure_when_below: 0.0   # source goes fully to cash
+
+# Not specified for an NSE setting: universe, signal, portfolio, sample, benchmark, execution, costs, stress, research.

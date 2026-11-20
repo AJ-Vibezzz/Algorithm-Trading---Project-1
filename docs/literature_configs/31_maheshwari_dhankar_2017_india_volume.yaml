@@ -1,0 +1,37 @@
+# =============================================================================
+# LITERATURE CONFIG 31 - Maheshwari & Dhankar (2017): volume-based momentum in India
+# Layout follows strategy_template.yaml; records the SOURCE, not your design.
+# null = source silent / not applicable. "[verify]" = check against original.
+# Only the bibliographic record was checked in this pass.
+# =============================================================================
+# Window convention (as this pipeline reads it - src/momo/signals.py, _window):
+# lookback_months = months from the decision date back to the START of the window,
+# skip_months = months from the decision date back to its END. So "12-1"
+# momentum (returns of months t-12..t-2, decided at the end of t-1) = lookback 12, skip 1.
+
+source:
+  citation: "Maheshwari, S. & Dhankar, R. S. (2017). Profitability of Volume-based Momentum and Contrarian Strategies in the Indian Stock Market. Global Business Review, 18(4), 974-992."
+  doi: null                    # [verify]
+  related:
+    - "Dhankar, R. S. & Maheshwari, S. (2014). A Study of Contrarian and Momentum Profits in Indian Stock Market. International Journal of Financial Management, 4(2), 40-54 (NSE stocks, Jan 1997 - Mar 2013: short-term momentum and long-term overreaction)."
+    - "Maheshwari, S. & Dhankar, R. S. (2018). Market State and Investment Strategies: Evidence from the Indian Stock Market. IIM Kozhikode Society & Management Review, 7(2), 154-170."
+  family: volume-conditioned momentum (Indian evidence)
+  market: "India - NSE stocks"   # [verify]
+  sample_in_paper: null         # [verify]
+  long_short_in_paper: null     # [verify]
+  headline_finding: >
+    Tests the Lee-Swaminathan idea (file 13) that past trading volume changes
+    momentum and contrarian profits, on Indian stocks. Findings: [verify - read the
+    paper before citing any result].
+  pipeline_fit: none
+  pipeline_notes: >
+    No volume-conditioning option in the template. The companion 2014 paper is the
+    cleaner citation for "short-term momentum exists on NSE" over 1997-2013.
+
+meta:
+  strategy_name: "lit-MaheshwariDhankar2017-India-Volume"
+  authors: []
+  design_note: "Momentum conditioned on past trading volume, Indian stocks."
+  is_example: false
+
+# Everything else: not specified / verify against the paper.

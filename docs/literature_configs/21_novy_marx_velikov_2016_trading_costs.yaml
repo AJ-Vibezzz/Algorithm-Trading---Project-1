@@ -1,0 +1,52 @@
+# =============================================================================
+# LITERATURE CONFIG 21 - Novy-Marx & Velikov (2016): trading costs and the buy/hold spread
+# Layout follows strategy_template.yaml; records the SOURCE, not your design.
+# null = source silent / not applicable. "[verify]" = check against original.
+# =============================================================================
+# Window convention (as this pipeline reads it - src/momo/signals.py, _window):
+# lookback_months = months from the decision date back to the START of the window,
+# skip_months = months from the decision date back to its END. So "12-1"
+# momentum (returns of months t-12..t-2, decided at the end of t-1) = lookback 12, skip 1.
+
+source:
+  citation: "Novy-Marx, R. & Velikov, M. (2016). A Taxonomy of Anomalies and Their Trading Costs. Review of Financial Studies, 29(1), 104-147."
+  doi: "10.1093/rfs/hhv063"
+  working_paper: "NBER Working Paper 20721 (2014)"
+  family: cost-aware implementation (applies to any momentum signal)
+  market: "US stocks"
+  sample_in_paper: "1963-2013"   # [verify]
+  long_short_in_paper: true
+  headline_finding: >
+    Trading costs always cut anomaly profits. Anomalies with one-sided monthly
+    turnover under about 50% mostly survive when designed to mitigate costs; few
+    higher-turnover ones do. A buy/hold spread - a stricter rule for entering a
+    position than for keeping it - is the single most effective simple
+    mitigation. Momentum has high turnover and comparatively low capacity.
+  pipeline_fit: full   # via exit_rank_multiple
+  pipeline_notes: >
+    The buy/hold spread is exactly the template's exit_rank_multiple: buy when a
+    stock enters the top N, sell only when it drops below rank k x N. The paper's
+    specific entry/exit thresholds: [verify]. Costs in the paper use an effective
+    bid-ask spread estimator (Hasbrouck); the template offers Corwin-Schultz and
+    Abdi-Ranaldo, both daily-high/low estimators - cite those papers for whichever
+    you choose. Average momentum cost of roughly 48 bps a month is a secondary
+    summary figure [verify in the paper's tables].
+
+meta:
+  strategy_name: "lit-NovyMarxVelikov2016-BuyHoldSpread"
+  authors: []
+  design_note: "Any momentum signal, with a wider exit rank than entry rank to cut turnover."
+  is_example: false
+
+portfolio:
+  exit_rank_multiple: null     # the paper's argument for a value > 1.0; the value is your decision
+  rebalance: null              # reduced rebalancing frequency is the paper's other mitigation
+
+costs:
+  spread_model: null           # paper uses Hasbrouck effective spread - not a template option
+
+research:
+  grid: {}                     # natural thing to test on the training set: exit_rank_multiple values
+  capacity_aum_inr: []         # the paper's capacity analysis motivates this sweep
+
+# Not specified for an NSE setting: universe, signal, sample, capital, benchmark, execution, risk, stress.

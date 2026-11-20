@@ -1,0 +1,62 @@
+# =============================================================================
+# LITERATURE CONFIG 25 - NSE Indices: Nifty500 Momentum 50
+# Layout follows strategy_template.yaml; records the SOURCE, not your design.
+# null = source silent / not applicable. "[verify]" = check against the current
+# NSE Indices methodology document.
+# Window convention (as this pipeline reads it - src/momo/signals.py, _window):
+# lookback_months = months from the decision date back to the START of the window,
+# skip_months = months from the decision date back to its END. So "12-1"
+# momentum (returns of months t-12..t-2, decided at the end of t-1) = lookback 12, skip 1.
+# =============================================================================
+
+source:
+  citation: "NSE Indices Ltd. Momentum Strategy whitepaper (2026) covering Nifty200 Momentum 30, Nifty Midcap150 Momentum 50 and Nifty500 Momentum 50; Methodology Document for Equity Indices. niftyindices.com"
+  doi: null
+  family: risk-adjusted cross-sectional momentum (Indian index methodology)
+  market: "India - constituents of the Nifty 500 (large, mid and small caps)"
+  sample_in_paper: "Base date 1 April 2005 (pre-launch history back-calculated)"   # [verify launch date]
+  long_short_in_paper: false
+  headline_finding: >
+    The top 50 Nifty 500 stocks by Normalised Momentum Score; the 2026 whitepaper
+    reports about 21.9% a year since inception against about 18.9% for the Nifty
+    500 (to 27 Feb 2026).
+  pipeline_fit: partial
+  pipeline_notes: >
+    Same scoring, tilt weighting and caps as file 22, on a broader universe that
+    reaches into small caps. Useful as an "all-cap" comparison point when you
+    argue for restricting to mid / small / micro.
+
+meta:
+  strategy_name: "lit-Nifty500Momentum50"
+  authors: []
+  design_note: "Top 50 of the Nifty 500 on volatility-adjusted 6- and 12-month momentum; semi-annual."
+  is_example: false
+
+benchmark:
+  primary: "NIFTY 500"
+
+universe:
+  source: index_constituents
+  index_names: ["NIFTY 500"]
+
+signal:
+  components:
+    - kind: risk_adjusted_return
+      lookback_months: 6
+      skip_months: 0           # decided at the end of M-1 on prices up to M-1: no skip
+      weight: 0.5
+    - kind: risk_adjusted_return
+      lookback_months: 12
+      skip_months: 0           # decided at the end of M-1 on prices up to M-1: no skip
+      weight: 0.5
+  volatility_lookback_days: 252
+
+portfolio:
+  selection: top_n
+  n_holdings: 50
+  weighting: score             # closest option; source = free-float mcap x score
+  max_weight_per_stock: 0.05   # [verify cap for this index]
+  holding_months: 6
+  rebalance: null              # semi-annual
+
+# Not specified as a strategy for your mandate: sample, capital, execution, costs, risk, stress, research.

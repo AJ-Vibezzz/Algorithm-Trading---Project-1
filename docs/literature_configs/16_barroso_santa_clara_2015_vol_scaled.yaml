@@ -1,0 +1,60 @@
+# =============================================================================
+# LITERATURE CONFIG 16 - Barroso & Santa-Clara (2015): risk-managed (volatility-scaled) momentum
+# Layout follows strategy_template.yaml; records the SOURCE, not your design.
+# null = source silent / not applicable. "[verify]" = check against original.
+# Window convention (as this pipeline reads it - src/momo/signals.py, _window):
+# lookback_months = months from the decision date back to the START of the window,
+# skip_months = months from the decision date back to its END. So "12-1"
+# momentum (returns of months t-12..t-2, decided at the end of t-1) = lookback 12, skip 1.
+# =============================================================================
+
+source:
+  citation: "Barroso, P. & Santa-Clara, P. (2015). Momentum has its moments. Journal of Financial Economics, 116(1), 111-120."
+  doi: "10.1016/j.jfineco.2014.11.010"
+  family: risk-managed momentum (volatility targeting)
+  market: "US stocks"
+  sample_in_paper: "1927-2011"
+  long_short_in_paper: true
+  headline_finding: >
+    Momentum's risk varies over time and is predictable. Scaling the long and short
+    legs by a 12% annual volatility target divided by the realised volatility of
+    the strategy's daily returns over the previous six months nearly doubles the
+    Sharpe ratio and largely removes the crashes. Plain momentum earned about
+    14.5% a year over the sample.
+  pipeline_fit: full   # vol_target maps one-to-one; long leg only
+  pipeline_notes: >
+    Base portfolio: deciles on t-12..t-2 return, re-formed monthly. The scaling
+    factor ranged roughly 0.13-2.00 (average about 0.9) - i.e. the source allows
+    leverage up to 2x. The template caps exposure at max_exposure; with
+    gross_exposure 1.0 and no leverage you get only the de-risking half.
+
+meta:
+  strategy_name: "lit-BarrosoSantaClara2015-VolScaled"
+  authors: []
+  design_note: "12-1 momentum, exposure scaled to a constant 12% target volatility using six months of daily returns."
+  is_example: false
+
+signal:
+  components:
+    - kind: return
+      lookback_months: 12      # window t-12..t-2 = lookback 12, skip 1
+      skip_months: 1
+      weight: 1.0
+
+portfolio:
+  selection: top_fraction
+  top_fraction: 0.10
+  weighting: null              # [verify] value- vs equal-weighted deciles
+  holding_months: 1
+  rebalance: monthly
+
+risk:
+  vol_target:
+    enabled: true
+    annual_vol: 0.12           # source's target for a long-short WML; a long-only book has
+                               # much higher vol, so 12% would keep you mostly in cash - your call
+    lookback_days: 126         # six months of daily returns
+    min_exposure: 0.0
+    max_exposure: 2.0          # source maximum; with no leverage, set 1.0
+
+# Not specified for an NSE setting: universe, sample, capital, benchmark, execution, costs, stress, research.

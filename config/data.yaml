@@ -1,0 +1,39 @@
+# =============================================================================
+# DATA CONFIGURATION - where files live and what to download
+# =============================================================================
+root: data                      # raw/, interim/, processed/ and external/ live under this folder
+
+# First date to download. It must be early enough to give your signal its full
+# look-back BEFORE your training period starts (12 months for a 12-month
+# signal, 36 for residual momentum), plus the minimum listing age you require.
+# TODO(group): set this once you have chosen your sample period.
+download_start: null            # e.g. 2012-01-01
+download_end: null              # null = up to today
+
+# Daily files to fetch (all public, from the NSE archive host):
+#   cm_bhav     prices, volumes, previous close, ISIN                       (required)
+#   pr          corporate actions, price-band hits, market cap from 2024     (required)
+#   ind_close   index levels for benchmarks, from 2012                       (required)
+#   mcwb        monthly Nifty 50 / Next 50 members and weights, from 2008    (required: large caps, data check)
+#   mcap_lists  NSE market-cap lists for all companies, 2019-2024            (required: market cap before 2024)
+#   fo_bhav     which stocks had futures - only if you design a short leg or hedge
+#   sec_list    security-wise price bands - optional cross-check
+datasets: [cm_bhav, pr, ind_close, mcwb, mcap_lists]
+
+archive_base_url: "https://nsearchives.nseindia.com"
+max_workers: 4                  # parallel connections - keep this low, NSE throttles
+request_timeout_s: 30
+max_retries: 4
+pause_s: 0.25                   # pause between requests per connection
+
+# ---- how raw files become the panel (data handling, not strategy) -------------
+equity_series: [EQ, BE, BZ]     # share lines kept in the panel (BE/BZ = trade-for-trade)
+require_equity_isin: true       # drop ETFs, bonds, partly-paid shares by ISIN
+equity_isin_regex: "^INE.{4}01"
+price_ratio_tolerance: 0.005    # how far the exchange's previous close may differ from ours before
+                                # it counts as an adjustment
+shares_ffill_days: 10           # carry shares outstanding forward this many days if a file is missing
+demerger_treatment: neutralise  # neutralise | raw   (see docs/04_methodology.md)
+include_dividends: true         # total returns (true) or price returns (false)
+symbol_reuse_gap_days: 180      # a symbol unused for longer than this is treated as a new company
+data_kind: real                 # "synthetic" is set automatically for the test fixture

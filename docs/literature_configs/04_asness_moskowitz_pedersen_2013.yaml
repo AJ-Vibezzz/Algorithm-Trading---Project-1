@@ -1,0 +1,55 @@
+# =============================================================================
+# LITERATURE CONFIG 04 - Asness, Moskowitz & Pedersen (2013): Value and Momentum Everywhere
+# Layout follows strategy_template.yaml; records the SOURCE, not your design.
+# null = source silent / not applicable. "[verify]" = check against original.
+# Window convention (as this pipeline reads it - src/momo/signals.py, _window):
+# lookback_months = months from the decision date back to the START of the window,
+# skip_months = months from the decision date back to its END. So "12-1"
+# momentum (returns of months t-12..t-2, decided at the end of t-1) = lookback 12, skip 1.
+# =============================================================================
+
+source:
+  citation: "Asness, C. S., Moskowitz, T. J. & Pedersen, L. H. (2013). Value and Momentum Everywhere. Journal of Finance, 68(3), 929-985."
+  doi: "10.1111/jofi.12021"
+  family: cross-sectional price momentum (global, multi-asset)
+  market: "Individual stocks in US, UK, continental Europe, Japan; plus index futures, bonds, currencies, commodities"
+  sample_in_paper: "Stocks: January 1972 - July 2011"
+  long_short_in_paper: true
+  headline_finding: >
+    Momentum (and value) premia appear in every market studied, with a strong
+    common factor structure; an equal-weighted value+momentum combination is far
+    smoother than either alone.
+  pipeline_fit: partial
+  pipeline_notes: >
+    Stock portfolios are terciles weighted by market cap (not a pipeline option).
+    Universe screens: excludes ADRs, REITs, financials, closed-end funds, foreign
+    shares and stocks priced under $1, then keeps a very liquid subset of stocks.
+    The exact liquidity cut-off is [verify].
+
+meta:
+  strategy_name: "lit-AMP2013-MOM"
+  authors: []
+  design_note: "12-month return skipping the latest month; top third of a liquid universe."
+  is_example: false
+
+universe:
+  source: null
+  segments: null
+  min_price_inr: null          # source uses a $1 floor; set your own rupee floor
+
+signal:
+  components:
+    - kind: return
+      lookback_months: 12      # past 12-month return, most recent month skipped   # window t-12..t-2 = lookback 12, skip 1
+      skip_months: 1
+      weight: 1.0
+
+portfolio:
+  selection: top_fraction
+  top_fraction: 0.333          # terciles
+  exit_rank_multiple: 1.0
+  weighting: null              # cap-weighted in source - not a pipeline option
+  holding_months: 1
+  rebalance: monthly
+
+# Not specified for an NSE setting: sample, capital, benchmark, execution, costs, risk, stress, research.

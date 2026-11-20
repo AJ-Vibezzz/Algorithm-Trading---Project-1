@@ -1,0 +1,60 @@
+# =============================================================================
+# LITERATURE CONFIG 01 - Jegadeesh & Titman (1993): classic J/K relative strength
+# Layout follows strategy_template.yaml. This records what the SOURCE did; it is
+# NOT your group's design. null = source silent, or not applicable to NSE.
+# "[verify]" = not confirmed against the original paper in this pass.
+# Window convention (as this pipeline reads it - src/momo/signals.py, _window):
+# lookback_months = months from the decision date back to the START of the window,
+# skip_months = months from the decision date back to its END. So "12-1"
+# momentum (returns of months t-12..t-2, decided at the end of t-1) = lookback 12, skip 1.
+# =============================================================================
+
+source:
+  citation: "Jegadeesh, N. & Titman, S. (1993). Returns to Buying Winners and Selling Losers: Implications for Stock Market Efficiency. Journal of Finance, 48(1), 65-91."
+  doi: "10.1111/j.1540-6261.1993.tb04702.x"   # [verify]
+  family: cross-sectional price momentum
+  market: "US - NYSE and AMEX common stocks"  # [verify]
+  sample_in_paper: "1965-1989"                 # [verify]
+  long_short_in_paper: true                    # winners decile minus losers decile
+  headline_finding: >
+    Buying past 3-12 month winners and selling losers earns roughly 1% a month over
+    the following 3-12 months; all 16 J/K combinations tested were profitable bar
+    the 3/3 strategy without a skip. [verify exact figures]
+  pipeline_fit: full   # long leg only, since the pipeline is long-only
+  pipeline_notes: >
+    Paper also tests a one-WEEK skip between formation and holding; the pipeline
+    skips whole months, so use skip 0 (no skip) or skip 1 (one month) and say so.
+
+meta:
+  strategy_name: "lit-JT1993-6x6"
+  authors: []
+  design_note: "Rank on past J-month return, buy top decile, hold K months in overlapping tranches."
+  is_example: false
+
+universe:
+  source: null                 # US exchange listing in paper; no NSE equivalent specified
+  segments: null
+  min_price_inr: null
+
+signal:
+  components:
+    - kind: return
+      lookback_months: 6       # paper's headline J; grid J in {3, 6, 9, 12}
+      skip_months: 0           # 1-week skip variant also reported
+      weight: 1.0
+
+portfolio:
+  selection: top_fraction
+  top_fraction: 0.10           # deciles
+  exit_rank_multiple: 1.0      # no buffer in paper
+  weighting: equal
+  holding_months: 6            # paper's headline K; grid K in {3, 6, 9, 12}, overlapping tranches
+  rebalance: monthly           # one new tranche formed each month
+
+research:
+  grid:                        # the paper's own grid: 4 x 4 = 16 combinations (x2 with the skip variant)
+    "signal.components.0.lookback_months": [3, 6, 9, 12]
+    "portfolio.holding_months": [3, 6, 9, 12]
+
+# Not specified by the source for an NSE setting (your decisions):
+#   sample, capital, benchmark, execution, costs, risk, stress.

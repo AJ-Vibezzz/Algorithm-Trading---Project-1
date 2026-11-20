@@ -1,0 +1,45 @@
+# =============================================================================
+# LITERATURE CONFIG 26 - Sehgal & Balakrishnan (2002): contrarian and momentum in India
+# Layout follows strategy_template.yaml; records the SOURCE, not your design.
+# null = source silent / not applicable. "[verify]" = check against original.
+# Formation/holding settings were NOT confirmed in this pass - read the paper.
+# =============================================================================
+# Window convention (as this pipeline reads it - src/momo/signals.py, _window):
+# lookback_months = months from the decision date back to the START of the window,
+# skip_months = months from the decision date back to its END. So "12-1"
+# momentum (returns of months t-12..t-2, decided at the end of t-1) = lookback 12, skip 1.
+
+source:
+  citation: "Sehgal, S. & Balakrishnan, I. (2002). Contrarian and momentum strategies in the Indian capital market. Vikalpa: The Journal for Decision Makers, 27(1), 13-20."
+  doi: "10.1177/0256090920020103"
+  family: cross-sectional price momentum (Indian evidence)
+  market: "India - listed stocks"   # [verify sample construction]
+  sample_in_paper: "1989-1999"
+  long_short_in_paper: true
+  headline_finding: >
+    The first major Indian test: strong short-horizon continuation (momentum)
+    and only weak long-horizon reversal, the latter appearing only when a year is
+    skipped between formation and holding.
+  pipeline_fit: full   # plain return momentum
+  pipeline_notes: >
+    Mainly cited as early evidence that momentum exists in India - part of your
+    economic rationale. Sample predates NSE's dominance and modern settlement, so
+    say why it is still relevant if you lean on it.
+
+meta:
+  strategy_name: "lit-SehgalBalakrishnan2002-India"
+  authors: []
+  design_note: "J/K price momentum on Indian stocks."
+  is_example: false
+
+signal:
+  components:
+    - kind: return
+      lookback_months: null    # [verify]
+      skip_months: null        # [verify]
+      weight: 1.0
+
+portfolio:
+  holding_months: null         # [verify]
+
+# Everything else: not specified / verify against the paper.

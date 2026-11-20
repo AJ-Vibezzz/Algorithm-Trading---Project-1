@@ -1,0 +1,53 @@
+# =============================================================================
+# LITERATURE CONFIG 05 - Novy-Marx (2012): intermediate-horizon ("12-7") momentum
+# Layout follows strategy_template.yaml; records the SOURCE, not your design.
+# null = source silent / not applicable. "[verify]" = check against original.
+# Window convention (as this pipeline reads it - src/momo/signals.py, _window):
+# lookback_months = months from the decision date back to the START of the window,
+# skip_months = months from the decision date back to its END. So "12-1"
+# momentum (returns of months t-12..t-2, decided at the end of t-1) = lookback 12, skip 1.
+# =============================================================================
+
+source:
+  citation: "Novy-Marx, R. (2012). Is momentum really momentum? Journal of Financial Economics, 103(3), 429-453."
+  doi: "10.1016/j.jfineco.2011.05.003"
+  family: cross-sectional price momentum (signal-window variant)
+  market: "US stocks; also industries, styles, country indices, commodities, currencies"
+  sample_in_paper: "1926-2008"
+  long_short_in_paper: true
+  headline_finding: >
+    Momentum is driven mainly by returns 12 to 7 months before formation, not by
+    recent (6-2) returns, especially among the largest, most liquid stocks.
+  pipeline_fit: full   # long leg only
+  pipeline_notes: >
+    Contested: Goyal & Wahal ("Is momentum an echo?") find the 12-7 result does not
+    generalise well internationally, and other work attributes it to January
+    seasonality. Test 12-7 against 12-1 on the training period, not instead of it.
+    [verify the Goyal-Wahal journal reference before citing]
+
+meta:
+  strategy_name: "lit-NovyMarx2012-12to7"
+  authors: []
+  design_note: "Rank on cumulative return from t-12 to t-7, ignoring the most recent six months."
+  is_example: false
+
+universe:
+  source: null
+  segments: null
+
+signal:
+  components:
+    - kind: return
+      lookback_months: 12      # window starts 12 months back (returns of months t-12 .. t-7)
+      skip_months: 6           # ... and ends 6 months back: the six most recent months are ignored
+      weight: 1.0
+
+portfolio:
+  selection: top_fraction
+  top_fraction: 0.20           # quintile example among large caps; deciles also reported
+  exit_rank_multiple: 1.0
+  weighting: null              # value-weighted and equal-weighted both reported
+  holding_months: 1
+  rebalance: monthly
+
+# Not specified for an NSE setting: sample, capital, benchmark, execution, costs, risk, stress, research.

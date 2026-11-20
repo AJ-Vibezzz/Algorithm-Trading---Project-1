@@ -1,0 +1,75 @@
+# =============================================================================
+# LITERATURE CONFIG 22 - NSE Indices: Nifty200 Momentum 30 (index methodology)
+# Layout follows strategy_template.yaml; records the SOURCE, not your design.
+# null = source silent / not applicable. "[verify]" = check against the current
+# NSE Indices methodology document (methodology is revised from time to time).
+# Window convention (as this pipeline reads it - src/momo/signals.py, _window):
+# lookback_months = months from the decision date back to the START of the window,
+# skip_months = months from the decision date back to its END. So "12-1"
+# momentum (returns of months t-12..t-2, decided at the end of t-1) = lookback 12, skip 1.
+# =============================================================================
+
+source:
+  citation: "NSE Indices Ltd. Methodology Document for Equity Indices (Nifty200 Momentum 30 section); Nifty200 Momentum 30 Index whitepaper (Sep 2020) and factsheet. niftyindices.com"
+  doi: null
+  family: risk-adjusted cross-sectional momentum (Indian index methodology)
+  market: "India - constituents of the Nifty 200 (large and mid caps)"
+  sample_in_paper: "Base date 1 April 2005 (history before launch is back-calculated)"
+  long_short_in_paper: false
+  headline_finding: >
+    The 30 Nifty 200 stocks with the highest Normalised Momentum Score, weighted by
+    free-float market cap times the score, have beaten the Nifty 200 over long
+    horizons with somewhat higher volatility (NSE Indices whitepapers).
+  pipeline_fit: partial
+  pipeline_notes: >
+    Score: Momentum Ratio MR = price return / annualised std. dev. of daily log
+    returns over 1 year. 6M return = P(M-1)/P(M-7) - 1 and 12M return =
+    P(M-1)/P(M-13) - 1, prices at the last trading day of months M-1, M-7, M-13,
+    where M is the rebalance month. Each MR is z-scored across eligible stocks;
+    weighted average Z = 50% Z6 + 50% Z12; Normalised Momentum Score = 1 + Z if
+    Z >= 0, else 1 / (1 - Z). The template's risk_adjusted_return with two
+    components reproduces the Z score. NOT reproducible in the template: the
+    mcap x score tilt weights (closest: score), the 1+Z / 1/(1-Z) transform, and
+    the cap of the lower of 5% or 5x the stock's free-float weight. A buffer on
+    score ranks limits turnover (a stock ranked below 45 is excluded, per
+    secondary sources [verify]). Preference for F&O-traded stocks [verify].
+    Back-calculated pre-launch history is itself a back-test - do not treat it as
+    live evidence.
+
+meta:
+  strategy_name: "lit-Nifty200Momentum30"
+  authors: []
+  design_note: "Top 30 of Nifty 200 on a 50/50 blend of volatility-adjusted 6- and 12-month returns; semi-annual."
+  is_example: false
+
+benchmark:
+  primary: "NIFTY 200"         # the index's parent
+
+universe:
+  source: index_constituents
+  segments: null
+  index_names: ["NIFTY 200"]
+
+signal:
+  components:
+    - kind: risk_adjusted_return
+      lookback_months: 6
+      skip_months: 0           # decided at the end of M-1 on P(M-1)/P(M-7): no skip in this pipeline
+      weight: 0.5
+    - kind: risk_adjusted_return
+      lookback_months: 12
+      skip_months: 0           # decided at the end of M-1 on prices up to M-1: no skip
+      weight: 0.5
+  winsorize_pct: null          # index does not winsorise as far as published  [verify]
+  volatility_lookback_days: 252   # 1 year of daily log returns
+
+portfolio:
+  selection: top_n
+  n_holdings: 30
+  exit_rank_multiple: 1.5      # ~ rank-45 exclusion buffer for N = 30  [verify]
+  weighting: score             # closest option; source = free-float mcap x score
+  max_weight_per_stock: 0.05   # "lower of 5% or 5x free-float weight" - only the 5% half is expressible
+  holding_months: 6
+  rebalance: null              # semi-annual (June and December) - template offers monthly/quarterly/weekly only
+
+# Not specified as a strategy for your mandate: sample, capital, execution, costs, risk, stress, research.

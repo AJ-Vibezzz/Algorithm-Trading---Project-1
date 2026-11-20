@@ -1,0 +1,49 @@
+# =============================================================================
+# LITERATURE CONFIG 30 - Sehgal, Pandey & Sen (2024): relative, absolute or combined momentum in India
+# Layout follows strategy_template.yaml; records the SOURCE, not your design.
+# null = source silent / not applicable. "[verify]" = check against original.
+# Only the abstract was checked in this pass.
+# =============================================================================
+# Window convention (as this pipeline reads it - src/momo/signals.py, _window):
+# lookback_months = months from the decision date back to the START of the window,
+# skip_months = months from the decision date back to its END. So "12-1"
+# momentum (returns of months t-12..t-2, decided at the end of t-1) = lookback 12, skip 1.
+
+source:
+  citation: "Sehgal, S., Pandey, A. & Sen, S. (2024). Relative, absolute or combined strength momentum strategies: what works for India? International Journal of Emerging Markets (published online 5 August 2024)."
+  doi: "10.1108/IJOEM-09-2023-1518"
+  family: dual momentum (relative + absolute), Indian evidence
+  market: "India - listed stocks"   # [verify]
+  sample_in_paper: null            # [verify]
+  long_short_in_paper: null        # [verify]
+  headline_finding: >
+    Of six momentum designs tested, an enhanced strategy combining relative and
+    absolute strength beats conventional price momentum in India; rational pricing
+    models do not explain the profits, and the authors favour investor overreaction
+    as the explanation.
+  pipeline_fit: full   # relative ranking + absolute screen
+  pipeline_notes: >
+    The most recent Indian paper directly comparing the designs you would choose
+    between - worth reading in full. Check whether results survive costs and how
+    small caps were handled. Volume / issue numbers were "ahead of print" in the
+    record found; cite the final version.
+
+meta:
+  strategy_name: "lit-SehgalPandeySen2024-India-Combined"
+  authors: []
+  design_note: "Relative-strength winners that also have positive absolute momentum."
+  is_example: false
+
+signal:
+  components:
+    - kind: return
+      lookback_months: null    # [verify]
+      skip_months: null        # [verify]
+      weight: 1.0
+  filters:
+    require_positive_momentum: true   # the "absolute" leg - check whether the paper uses 0 or a T-bill hurdle
+
+portfolio:
+  holding_months: null         # [verify]
+
+# Everything else: not specified / verify against the paper.

@@ -1,0 +1,56 @@
+# =============================================================================
+# LITERATURE CONFIG 06 - George & Hwang (2004): 52-week-high momentum
+# Layout follows strategy_template.yaml; records the SOURCE, not your design.
+# null = source silent / not applicable. "[verify]" = check against original.
+# Window convention (as this pipeline reads it - src/momo/signals.py, _window):
+# lookback_months = months from the decision date back to the START of the window,
+# skip_months = months from the decision date back to its END. So "12-1"
+# momentum (returns of months t-12..t-2, decided at the end of t-1) = lookback 12, skip 1.
+# =============================================================================
+
+source:
+  citation: "George, T. J. & Hwang, C.-Y. (2004). The 52-Week High and Momentum Investing. Journal of Finance, 59(5), 2145-2176."   # pages [verify]
+  doi: "10.1111/j.1540-6261.2004.00695.x"   # [verify]
+  family: cross-sectional momentum (anchoring signal)
+  market: "US stocks (CRSP)"
+  sample_in_paper: "July 1963 - December 2001"
+  long_short_in_paper: true
+  headline_finding: >
+    Nearness of the current price to its 52-week high explains a large part of
+    momentum profits and dominates the past-return signal in head-to-head sorts.
+    Economic story: investors anchor on the 52-week high and under-react to news
+    that pushes prices near or through it.
+  pipeline_fit: full   # long leg only
+  pipeline_notes: >
+    Winners (losers) are the 30% of stocks with the highest (lowest) ratio of
+    current price to the 52-week high, equal-weighted, held 6 months in
+    overlapping portfolios. Whether a skip month is used: [verify].
+
+meta:
+  strategy_name: "lit-GeorgeHwang2004-52wHigh"
+  authors: []
+  design_note: "Buy the 30% of stocks trading closest to their 52-week high; hold six months."
+  is_example: false
+
+universe:
+  source: null
+  segments: null
+
+signal:
+  components:
+    - kind: high_52w
+      lookback_months: 12      # 52 weeks
+      skip_months: 0           # [verify]
+      weight: 1.0
+
+portfolio:
+  selection: top_fraction
+  top_fraction: 0.30
+  exit_rank_multiple: 1.0
+  weighting: equal
+  holding_months: 6            # overlapping tranches, JT-style
+  rebalance: monthly
+
+# Not specified for an NSE setting: sample, capital, benchmark, execution, costs, risk, stress, research.
+# India note: in Indian small caps, upper circuits often bind exactly when a stock
+# is at its 52-week high - your block_buy_at_upper_circuit rule will bite here.

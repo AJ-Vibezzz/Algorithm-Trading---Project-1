@@ -1,0 +1,135 @@
+# =============================================================================
+# STATUTORY AND EXCHANGE CHARGES ON NSE CASH-MARKET DELIVERY TRADES  (facts)
+# =============================================================================
+# Each list is a history: the rate that applies on a trade date is the last
+# entry whose `from` date is on or before it. Rates are fractions of traded
+# value (0.001 = 0.1% = 10 basis points) charged per side as stated.
+#
+# These are facts, not design choices - but YOU are responsible for them.
+# Every entry carries the source it was taken from and a `checked` flag:
+#   checked: web   -> confirmed against the cited public source in Nov 2026
+#   checked: no    -> from general knowledge only; confirm before relying on it
+# Verify each line against the primary source (exchange / SEBI / CBIC circular)
+# and tick it off in docs/10_verification_checklist.md.
+#
+# What is NOT here (group-owned assumptions, see config/strategy.yaml -> costs):
+#   brokerage, bid-ask spread model, market-impact coefficient, DP charges.
+# =============================================================================
+
+# Securities Transaction Tax on delivery-based equity trades (charged on BOTH sides).
+stt_delivery:
+  - from: 2006-06-01
+    buy: 0.00125
+    sell: 0.00125
+    checked: no
+    source: "Rate before the 2012 cut. Start date from general knowledge - confirm if your sample begins before July 2012."
+  - from: 2012-07-01
+    buy: 0.001
+    sell: 0.001
+    checked: web
+    source: "Finance Act 2012 amended s.98 of the Finance (No.2) Act 2004: 0.125% -> 0.1%, effective 1 July 2012. CSE notice 20 Jun 2012: https://www.cse-india.com/upload/CSE%20Notices%20&%20Circulars/2012/Notice200612.htm . Budget 2026 changed F&O rates only; delivery stays 0.1%: https://groww.in/blog/what-is-stt"
+
+# Stamp duty. Uniform nationwide rate since 1 July 2020, payable by the BUYER only.
+# Before that, duty was set by each State and usually collected on both sides.
+stamp_duty:
+  - from: 2000-01-01
+    buy: 0.0001
+    sell: 0.0001
+    checked: no
+    source: "ASSUMPTION for the pre-July-2020 State regime (Maharashtra-style 0.01% on delivery, both sides). Rates differed by State and some had caps. Confirm for your assumed State or replace."
+  - from: 2020-07-01
+    buy: 0.00015
+    sell: 0.0
+    checked: web
+    source: "Indian Stamp Act amendments in force 1 July 2020: 0.015% on delivery buys. Zerodha bulletin: https://zerodha.com/marketintel/bulletin/259741/uniform-stamp-duty-applicable-from-july-1-2020"
+
+# NSE transaction charge, cash market (charged on BOTH sides).
+exchange_transaction:
+  - from: 2000-01-01
+    rate: 0.0000325
+    checked: no
+    source: "Base slab (Rs 325 per crore) before the 2021 increase; consistent with the 2023 roll-back restoring 0.00325%. Slab discounts for very large members ignored."
+  - from: 2021-01-01
+    rate: 0.0000345
+    checked: web
+    source: "6% increase effective 1 Jan 2021 (NSE press release on the roll-back, 24 Mar 2023): https://nsearchives.nseindia.com/web/sites/default/files/inline-files/PR%20NSE%20rolls%20back%20increase%20in%20transaction%20charges.pdf"
+  - from: 2023-04-01
+    rate: 0.0000325
+    checked: web
+    source: "Roll-back effective 1 Apr 2023. Zerodha bulletin: https://zerodha.com/marketintel/bulletin/347967/revision-in-transaction-charges-and-stt-from-1st-april-2023"
+  - from: 2024-04-01
+    rate: 0.0000322
+    checked: web
+    source: "Effective 1 Apr 2024. Zerodha bulletin: https://zerodha.com/marketintel/bulletin/373933/revision-in-nse-transaction-charges-from-april-1-2024"
+  - from: 2024-10-01
+    rate: 0.0000297
+    checked: web
+    source: "Flat rate after SEBI's 'true to label' circular (1 Jul 2024), effective 1 Oct 2024. Zerodha bulletin: https://zerodha.com/marketintel/bulletin/391488/revision-in-transactions-charges-from-1st-october-2024"
+
+# SEBI turnover fee (charged on BOTH sides). Rs 10 per crore = 0.000001.
+sebi_turnover_fee:
+  - from: 2000-01-01
+    rate: 0.000002
+    checked: web
+    source: "Rs 20 per crore before the 2017 cut: https://www.business-standard.com/amp/article/pti-stories/sebi-lowers-broker-fees-by-25-goes-digital-on-all-payments-117011400596_1.html"
+  - from: 2017-04-01
+    rate: 0.0000015
+    checked: web
+    source: "Rs 15 per crore, SEBI (Payment of Fees) (Amendment) Regulations 2017, w.e.f. 1 Apr 2017 (same source)."
+  - from: 2019-04-01
+    rate: 0.000001
+    checked: web
+    source: "Rs 10 per crore from 1 Apr 2019: https://business-standard.com/amp/article/news-ani/sebi-reduces-fee-for-brokers-agri-commodity-derivative-transactions-119030100721_1.html"
+  - from: 2020-06-01
+    rate: 0.0000005
+    checked: web
+    source: "Halved for June 2020 - March 2021 (Covid relief). SEBI press release 27 Apr 2020: https://www.sebi.gov.in/media/press-releases/apr-2020/sebi-reduces-broker-turnover-fees-and-filing-fees-for-issuers_46571.html"
+  - from: 2021-04-01
+    rate: 0.000001
+    checked: web
+    source: "Relief ended 31 Mar 2021; back to Rs 10 per crore (still the rate in 2026)."
+
+# NSE Investor Protection Fund Trust contribution (charged on BOTH sides).
+ipft:
+  - from: 2000-01-01
+    rate: 0.000000001
+    checked: web
+    source: "Rs 0.01 per crore before April 2023 (NSE press release, 24 Mar 2023, link above)."
+  - from: 2023-04-01
+    rate: 0.000001
+    checked: web
+    source: "Recalibrated to Rs 10 per crore in cash equities from 1 Apr 2023 (same press release)."
+
+# Service tax, then GST, on brokerage + exchange transaction charge + IPFT
+# (+ SEBI fee from the date below). NOT charged on STT, stamp duty or trade value.
+tax_on_services:
+  - from: 2009-02-24
+    rate: 0.103
+    checked: no
+    source: "Service tax 10% plus cesses (Feb 2009 - Mar 2012), from general knowledge. Only matters if your sample starts before April 2012."
+  - from: 2012-04-01
+    rate: 0.1236
+    checked: web
+    source: "Service tax 12% plus cesses. History: https://factly.in/history-service-tax-5-15"
+  - from: 2015-06-01
+    rate: 0.14
+    checked: web
+    source: "Same source."
+  - from: 2015-11-15
+    rate: 0.145
+    checked: web
+    source: "Swachh Bharat Cess added. Same source."
+  - from: 2016-06-01
+    rate: 0.15
+    checked: web
+    source: "Krishi Kalyan Cess added. Same source."
+  - from: 2017-07-01
+    rate: 0.18
+    checked: no
+    source: "GST at 18% replaced service tax on 1 July 2017. Widely published by brokers; confirm against the CBIC rate notification."
+
+# Date from which GST is also charged on the SEBI turnover fee.
+gst_on_sebi_fee_from:
+  date: 2022-07-18
+  checked: no
+  source: "From general knowledge (GST Council withdrew the exemption for SEBI services in July 2022). The amount is immaterial; confirm or set to a date you can source."

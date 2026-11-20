@@ -1,0 +1,51 @@
+# =============================================================================
+# LITERATURE CONFIG 27 - Ansari & Khan (2012): momentum anomaly in India
+# Layout follows strategy_template.yaml; records the SOURCE, not your design.
+# null = source silent / not applicable. "[verify]" = check against original.
+# Window convention (as this pipeline reads it - src/momo/signals.py, _window):
+# lookback_months = months from the decision date back to the START of the window,
+# skip_months = months from the decision date back to its END. So "12-1"
+# momentum (returns of months t-12..t-2, decided at the end of t-1) = lookback 12, skip 1.
+# =============================================================================
+
+source:
+  citation: "Ansari, V. A. & Khan, S. (2012). Momentum anomaly: evidence from India. Managerial Finance, 38(2), 206-223."
+  doi: "10.1108/03074351211193730"
+  family: cross-sectional price momentum (Indian evidence)
+  market: "India - listed stocks"   # [verify universe]
+  sample_in_paper: "1995-2006"
+  long_short_in_paper: true
+  headline_finding: >
+    Strong momentum profits in India; CAPM and the Fama-French three-factor model
+    fail to explain them. Of the J/K combinations tested, the 3-month formation /
+    3-month holding portfolio gave the highest average monthly return (as reported
+    by later papers citing it [verify in the original]).
+  pipeline_fit: full   # long leg only
+  pipeline_notes: >
+    Note the contrast with US evidence, where 3/3 was the weakest JT combination
+    (file 01). Short windows mean high turnover - check against costs (file 21).
+
+meta:
+  strategy_name: "lit-AnsariKhan2012-India-3x3"
+  authors: []
+  design_note: "Short-horizon (3-month) momentum on Indian stocks."
+  is_example: false
+
+signal:
+  components:
+    - kind: return
+      lookback_months: 3
+      skip_months: 0           # [verify]
+      weight: 1.0
+
+portfolio:
+  selection: top_fraction
+  top_fraction: null           # [verify]
+  weighting: null              # [verify]
+  holding_months: 3
+  rebalance: monthly           # [verify]
+
+research:
+  grid: {}                     # paper's own J/K grid  [verify]
+
+# Not specified for your mandate: universe, sample, capital, benchmark, execution, costs, risk, stress.

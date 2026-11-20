@@ -1,0 +1,56 @@
+# =============================================================================
+# LITERATURE CONFIG 07 - Rachev, Jasic, Stoyanov & Fabozzi (2007): reward-risk momentum
+# Layout follows strategy_template.yaml; records the SOURCE, not your design.
+# null = source silent / not applicable. "[verify]" = check against original.
+# Window convention (as this pipeline reads it - src/momo/signals.py, _window):
+# lookback_months = months from the decision date back to the START of the window,
+# skip_months = months from the decision date back to its END. So "12-1"
+# momentum (returns of months t-12..t-2, decided at the end of t-1) = lookback 12, skip 1.
+# =============================================================================
+
+source:
+  citation: "Rachev, S., Jasic, T., Stoyanov, S. & Fabozzi, F. J. (2007). Momentum strategies based on reward-risk stock selection criteria. Journal of Banking & Finance, 31(8), 2325-2346."
+  related: "Biglova, A., Jasic, T., Rachev, S. & Fabozzi, F. J. (2004). Profitability of momentum strategies: Application of novel risk/return ratio stock selection criteria. Investment Management and Financial Innovations, 1(4)."
+  family: cross-sectional momentum (risk-adjusted ranking)
+  market: "US large caps"                 # [verify universe]
+  sample_in_paper: null                   # [verify]
+  long_short_in_paper: true
+  headline_finding: >
+    Ranking on reward-risk ratios built from daily returns (Sharpe ratio, and
+    tail-risk ratios such as STARR and the R-ratio) gives better risk-adjusted
+    performance and lower tail risk than ranking on cumulative return, which earns
+    higher raw profits but with fatter left tails.
+  pipeline_fit: partial
+  pipeline_notes: >
+    The pipeline's risk_adjusted_return (return / annualised volatility) is the
+    Sharpe-type criterion. STARR and R-ratio (expected-tail-loss denominators) are
+    not implemented. The companion 2004 paper tests 6- and 12-month formation and
+    holding periods; the exact JBF settings are [verify].
+
+meta:
+  strategy_name: "lit-Rachev2007-SharpeRank"
+  authors: []
+  design_note: "Rank stocks on past return divided by daily-return volatility instead of raw return."
+  is_example: false
+
+universe:
+  source: null
+  segments: null
+
+signal:
+  components:
+    - kind: risk_adjusted_return
+      lookback_months: 12      # 6 and 12 tested in the 2004 companion paper  [verify for JBF]
+      skip_months: 0           # [verify]
+      weight: 1.0
+  volatility_lookback_days: 252   # set equal to the formation window
+
+portfolio:
+  selection: top_fraction
+  top_fraction: 0.10           # [verify]
+  exit_rank_multiple: 1.0
+  weighting: equal             # [verify]
+  holding_months: 6            # 6 and 12 tested  [verify]
+  rebalance: monthly
+
+# Not specified for an NSE setting: sample, capital, benchmark, execution, costs, risk, stress, research.

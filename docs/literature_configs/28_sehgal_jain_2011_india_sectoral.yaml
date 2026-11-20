@@ -1,0 +1,51 @@
+# =============================================================================
+# LITERATURE CONFIG 28 - Sehgal & Jain (2011): stock and sectoral momentum in India
+# Layout follows strategy_template.yaml; records the SOURCE, not your design.
+# null = source silent / not applicable. "[verify]" = check against original.
+# Window convention (as this pipeline reads it - src/momo/signals.py, _window):
+# lookback_months = months from the decision date back to the START of the window,
+# skip_months = months from the decision date back to its END. So "12-1"
+# momentum (returns of months t-12..t-2, decided at the end of t-1) = lookback 12, skip 1.
+# =============================================================================
+
+source:
+  citation: "Sehgal, S. & Jain, S. (2011). Short-term momentum patterns in stock and sectoral returns: evidence from India. Journal of Advances in Management Research, 8(1), 99-122."
+  doi: "10.1108/09727981111129327"
+  related: "Sehgal, S. & Jain, K. (2015). Profitability of Price, Earnings and Revenue Momentum Strategies: The Indian Evidence. Asian Academy of Management Journal of Accounting and Finance, 11(1), 47-84 (BSE 500, 2002-2010)."
+  family: stock and sector momentum (Indian evidence)
+  market: "India - listed stocks and sector portfolios"   # [verify]
+  sample_in_paper: null       # [verify]
+  long_short_in_paper: true
+  headline_finding: >
+    Momentum profits exist in India and are stronger for 6-6 than for 12-12
+    strategies; they are larger in some characteristic-sorted portfolios, and
+    sector portfolios also show momentum. The 2015 companion paper finds price
+    momentum winners beat earnings- and revenue-momentum winners, with profits
+    persisting up to about six months.
+  pipeline_fit: partial
+  pipeline_notes: >
+    The 6-6 stock strategy maps directly. Sectoral momentum cannot run in the
+    template (stock-level ranking only) - use it to justify a sector cap and for
+    attribution. Earnings and revenue momentum need fundamentals, which the
+    pipeline does not ingest.
+
+meta:
+  strategy_name: "lit-SehgalJain2011-India-6x6"
+  authors: []
+  design_note: "6-month formation, 6-month holding momentum on Indian stocks."
+  is_example: false
+
+signal:
+  components:
+    - kind: return
+      lookback_months: 6
+      skip_months: 0           # [verify]
+      weight: 1.0
+
+portfolio:
+  holding_months: 6
+  top_fraction: null           # [verify]
+  weighting: null              # [verify]
+  max_weight_per_sector: null  # sectoral momentum is the reason to think about this; value is yours
+
+# Not specified for your mandate: universe, sample, capital, benchmark, execution, costs, risk, stress, research.

@@ -1,0 +1,201 @@
+# =============================================================================
+# STRATEGY CONFIGURATION                                  >>> GROUP-OWNED <<<
+# "Slow Diffusion Residual Momentum" - a closely held Rs 50 crore fund
+# Long-only residual momentum in Indian mid and small caps (ranks 101-500).
+# Objective: a consistent return generator.
+#
+# All choices made by the group in a structured review with an AI assistant
+# (Claude, 17-18 Nov 2026), which explained options, evidence and trade-offs;
+# the holdings count (30) was AI-suggested and adopted. Reasons for every
+# choice: docs/03_design_decisions.md. Declared in the AI-use appendix.
+#
+# Window convention (src/momo/signals.py): lookback_months = months before the
+# decision date where the window STARTS; skip_months = where it ENDS.
+# =============================================================================
+
+meta:
+  strategy_name: "Slow Diffusion Residual Momentum"
+  authors: []                    # TODO both group members
+  design_note: >
+    News about thinly followed Indian mid and small caps reaches prices slowly,
+    so firm-specific (market-residual) drift over the past 6-12 months persists.
+    Buy the 30 strongest residual-momentum stocks that are actually rising and
+    whose rise came from steady rather than jumpy moves, sized by inverse
+    volatility, reviewed monthly against drift thresholds.
+  is_example: false
+
+# --- D1. Sample: 58 training decisions (Feb 2012 - Nov 2016), 117 test (Jan 2017 - Sep 2026)
+sample:
+  train_start: 2012-02-01
+  train_end: 2016-12-31
+  test_start: 2017-01-01
+  test_end: 2026-10-30
+
+# --- D2. Fund size
+capital:
+  initial_capital_inr: 500000000 # Rs 50 crore, closely held (PMS / Cat III AIF wrapper)
+  cash_return: rf
+
+# --- D3. Benchmark
+benchmark:
+  primary: "NIFTY MIDSMALLCAP 400 TRI"
+  others: [UNIVERSE_EQUAL]
+
+# --- D4. Universe
+universe:
+  source: mcap_rank
+  segments: [mid, small]
+  rank_bounds:
+    large: [1, 100]
+    mid: [101, 250]
+    small: [251, 500]
+    micro: [501, 750]
+  mcap_average_days: 126
+  size_metrics: [exchange_mcap, exchange_list, traded_value]   # market cap from Apr 2019, traded value before
+  large_cap_indices: [NIFTY 50, NIFTY NEXT 50]
+  index_names: []
+  allowed_series: [EQ]           # the only surveillance screen in effect (no ASM/GSM file)
+  min_listing_days: 504          # two years: the residual signal needs 24 months of history anyway
+  min_price_inr: 20
+  min_median_traded_value_inr: 11000000   # Rs 1.1 cr/day = position (50 cr / 30) / (0.10 x 15 days)
+  liquidity_lookback_days: 126
+  min_traded_days_fraction: 0.9
+  max_circuit_days_fraction: 0.10
+  circuit_lookback_days: 60
+  exclude_surveillance: true     # no-op until a surveillance file is supplied
+
+# --- D5. Signal: residual momentum, 12-1 and 6-1 windows blended, rising and smooth only
+signal:
+  components:
+    - kind: residual
+      lookback_months: 12        # months 12 to 2 before the decision
+      skip_months: 1
+      weight: 0.5
+      residual_estimation_months: 24
+    - kind: residual
+      lookback_months: 7         # months 7 to 2 before the decision
+      skip_months: 1
+      weight: 0.5
+      residual_estimation_months: 24
+  winsorize_pct: 0.01
+  min_history_fraction: 0.8
+  days_per_month: 21
+  volatility_lookback_days: 252
+  filters:
+    require_positive_momentum: true     # own total return over months 12-2 must be positive; also keeps
+                                        # the filter below meaning "steady climber"
+    max_volatility_percentile: null
+    max_information_discreteness: 0.0   # drop winners that fell on more days than they rose
+
+# --- D6-D8. Portfolio: monthly review, trades only past the drift thresholds
+portfolio:
+  selection: top_n
+  n_holdings: 30                 # grid: 30 vs 40
+  top_fraction: null
+  exit_rank_multiple: 1.5        # hold until a stock falls below rank 45
+  weighting: inverse_vol
+  weighting_lookback_days: 126
+  max_weight_per_stock: 0.06
+  max_weight_per_sector: 1.0     # no sector limit: most companies have no sector label
+  holding_months: 1
+  rebalance: monthly             # grid: monthly vs quarterly
+  gross_exposure: 1.0
+  cash_buffer: 0.01
+  no_trade_band: 0.005           # leave a position alone if within 0.5 pp (Rs 25 lakh) of target
+
+# --- D9. Execution (decide day t, trade from t+1)
+execution:
+  price: vwap
+  participation_cap: 0.10
+  adv_window_days: 20
+  cap_on_realised_volume: true
+  max_execution_days: 15
+  min_trade_value_inr: 0
+  block_buy_at_upper_circuit: true
+  block_sell_at_lower_circuit: true
+
+# --- D10. Costs (statutory charges: config/statutory_charges.yaml)
+costs:
+  brokerage_bps_per_side: 10     # between SEBI's mutual-fund brokerage caps: 12 bps (most of sample), 6 bps (Dec 2025)
+  spread_model: abdi_ranaldo
+  fixed_half_spread_bps: null
+  spread_window_days: 21
+  max_half_spread_bps: 250
+  impact_coefficient: 1.0        # base case; robustness runs at 0.5 and 2.0
+  impact_vol_window_days: 60
+  dp_charge_inr_per_sell: 0
+
+# --- D11-D12. Risk
+risk:
+  var:
+    confidence: 0.99
+    horizon_days: 1
+    lookback_days: 500
+    method: historical
+    limit_pct_nav: 0.045
+    action: scale
+  es:
+    confidence: 0.975
+    limit_pct_nav: 0.06
+  vol_target:
+    enabled: true
+    annual_vol: 0.1678           # NIFTY MIDSMALLCAP 400 TRI annualised volatility, Feb 2012 - Dec 2016
+    lookback_days: 126
+    min_exposure: 0.5            # this layer alone never cuts below 50%; overall exposure is the SMALLEST
+                                 # of vol target, VaR, ES and drawdown tier, so it can still reach 25% or less
+    max_exposure: 1.0
+  drawdown:
+    soft_limit: 0.15
+    soft_exposure: 0.5
+    hard_limit: 0.25
+    hard_exposure: 0.25
+    cooloff_days: 42
+    soft_release_level: 0.10
+  stop_loss:
+    enabled: false
+    kind: trailing
+    threshold: null
+    cooldown_days: 21
+  regime_filter:
+    enabled: false
+    index: null
+    ma_days: 200
+    exposure_when_below: 0.5
+  beta:
+    max_portfolio_beta: null     # reported, not limited
+    lookback_days: 252
+    benchmark: null
+  hedge:
+    enabled: false
+    index: null
+    ratio: 1.0
+    margin_rate: 0.20
+    cost_bps_per_side: 2.0
+    roll_cost_bps_per_month: 2.0
+  liquidity:
+    horizon_days: 15             # same window as position building
+    min_sellable_fraction: 0.9
+  delisting_return: -0.30
+  max_stale_days: 42
+
+# --- D13. Stress tests (dates from `python run.py episodes`, month-level windows)
+stress:
+  windows:
+    - {name: "Small-cap fall 2013 (-35%, train)",     start: 2013-01-01, end: 2013-08-31}
+    - {name: "Small-cap fall 2015-16 (-28%, train)",  start: 2015-04-01, end: 2016-02-29}
+    - {name: "Small-cap correction 2018-20 (-60%)",   start: 2018-04-01, end: 2020-03-31}
+    - {name: "Covid crash 2020 (Nifty 500 -38%)",     start: 2020-01-14, end: 2020-03-23}
+    - {name: "Momentum crash: Covid rebound 2020",    start: 2020-03-24, end: 2020-06-30}   # end [verify] from 18_momentum_factor_worst_periods.csv
+    - {name: "Small-cap fall 2022 (-33%)",            start: 2022-01-01, end: 2022-06-30}
+    - {name: "Small-cap fall 2024-25 (-25%)",         start: 2024-09-23, end: 2025-03-31}
+  market_shocks: [-0.10, -0.20, -0.30]
+  adv_haircuts: [0.5, 0.75]
+  spread_multipliers: [2, 3]
+
+# --- D14. What the training data decides: 2 x 2 = 4 runs
+research:
+  grid:
+    "portfolio.n_holdings": [30, 40]
+    "portfolio.rebalance": [monthly, quarterly]
+  selection_metric: sharpe       # Calmar also reported
+  capacity_aum_inr: [500000000, 1000000000, 2500000000, 10000000000]   # Rs 50, 100, 250, 1,000 crore
